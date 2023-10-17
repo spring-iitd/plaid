@@ -185,6 +185,7 @@ class CAN(object):
         self.speed_message = self.db.get_message_by_name('CAR_SPEED')
         self.steer_message = self.db.get_message_by_name('STEERING_SENSORS')
         self.gear_message = self.db.get_message_by_name('GEARBOX')
+        self.throttle_message = self.db.get_message_by_name('POWERTRAIN_DATA')
 
     # def send_car_speed(self, speed):
     #     data = self.speed_message.encode({'WHEEL_SPEED_FL': speed, 'WHEEL_SPEED_FR': speed, 'WHEEL_SPEED_RL': speed, 'WHEEL_SPEED_RR': speed})
@@ -199,9 +200,16 @@ class CAN(object):
         print("MESSAGE SPEED: ", message)
         can_bus.send(message)
 
+    def send_throttle(self, throttle):
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        data = self.throttle_message.encode({'PEDAL_GAS':250,'ENGINE_RPM':14000,'GAS_PRESSED':throttle,'ACC_STATUS':0,'BOH_17C':1,'BRAKE_SWITCH':1,'BOH2_17C':1,'BRAKE_PRESSED':0,'BOH3_17C':0})
+        message = can.Message(arbitration_id=self.throttle_message.frame_id, data=data)
+        print("MESSAGE THROTTLE: ", message)
+        can_bus.send(message)
+
     def send_steering(self, steer):
         can_bus = can.interface.Bus('vcan0', bustype='socketcan')
-        data = self.steer_message.encode({'STEER_ANGLE': steer * 500})
+        data = self.steer_message.encode({'STEER_ANGLE': steer})    #steer*500
         message = can.Message(arbitration_id=self.steer_message.frame_id, data=data)
         print("MESSAGE STEER: ", message)
         can_bus.send(message)
@@ -638,6 +646,7 @@ class HUD(object):
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
         #self.can.send_car_speed(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        print("velocity : ",3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
         # print("message:", self.can.can_bus.recv(0))
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
@@ -656,10 +665,14 @@ class HUD(object):
             'Height:  % 18.0f m' % t.location.z,
             '']
         if isinstance(c, carla.VehicleControl):
+            #self.can.send_throttle(int(c.throttle))
+            print("throttle message:",c.throttle)
+            #self.can.send_steering(c.steer)
+            print('c.steer: ', c.steer)
             #print('c.gear: ', c.gear)
             #self.can.send_gear(c.gear)
-            #self.can.send_steering(c.steer)
-            #print('c.steer: ', c.steer)
+            
+            
             self._info_text += [
                 ('Throttle:', c.throttle, 0.0, 1.0),
                 ('Steer:', c.steer, -1.0, 1.0),
@@ -1159,23 +1172,14 @@ def game_loop(args):
             world.tick(clock)
             can_bus = can.interface.Bus('vcan0', bustype='socketcan')
             msg = can_bus.recv(0)
-            #hud.can.receive_steer()
+            
+            #this can replay the steer-throttle log
             if msg is not None:
-                #print(msg)
-                #print(hud.can.steer_message)
                 steer_data = hud.can.steer_message.decode(msg.data)
-                print(type(steer_data))
-                #steer_data = 1 
-                #print(steer_data)
+                throttle_data = hud.can.throttle_message.decode(msg.data)
                 world.player.apply_control(carla.VehicleControl(steer=int(steer_data['STEER_ANGLE'])))
-            # while(1):
-            #     msg = hud.can.can_bus.recv(0)
-            #     print(msg.data)
-            #     #print("steer message printing ",hud.can.steer_message)
-            #     if (msg is None): break
-            #     #print(hud.can.db.get_message_by_name('CAR_SPEED').decode(msg))
-            #     #print(hud.can.db.get_message_by_name('STEERING_SENSORS').decode(msg))
-            #     #print(hud.can.db.get_message_by_name('GEARBOX').decode(msg))
+                world.player.apply_control(carla.VehicleControl(throttle=throttle_data['GAS_PRESSED']))     #speed_data['CAR_SPEED']  
+            
             if controller.parse_events(client, world, clock):
                 return
                 
@@ -1184,39 +1188,6 @@ def game_loop(args):
 
             world.render(display)
             pygame.display.flip()
-
-            #if msg is not None:
-                #msg_data = msg.data
-            
-            # gear 00001A3
-            # steering 14A
-            # speed 1D0
-            
-            # Neutral - 0 0 0 04 03 0 0 0
-            # G1 08 04
-            # g2 08 04
-            # R 02 02
-            
-            # def control(world, msg_data):        
-            #     if (msg_data == bytearray(b'\x00\x02\x00\x04\x00\x08\x00\x10')):           
-            #         world.player.apply_control(carla.VehicleControl(throttle=1.0))
-            #     if (msg_data == bytearray(b'\x00\x00\x00\x04\x03\x00\x00\x00')):           
-            #         world.player.apply_control(carla.VehicleControl(gear=1))
-            #     if (msg_data == bytearray(b'\x0D\xAC\x00\x00\x00\x00\x00\x00')):
-            #         world.player.apply_control(carla.VehicleControl(steer=-1.0))
-            #     #if (msg_data == bytearray(b'\x13\x88\x00\x00\x00\x00\x00\x00')):
-            #      #   world.player.apply_control(carla.VehicleControl(steer=-1.0))
-            #     if (msg_data == bytearray(b'\xf2\x54\x00\x00\x00\x00\x00\x00')):
-            #        world.player.apply_control(carla.VehicleControl(steer=0.5))
-            #     if (msg_data == bytearray(b'\x20\x4E\x40\x9c\x81\x39\x02\x70')):
-            #         world.player.apply_control(carla.VehicleControl(throttle=1.0, brake=0.0, hand_brake=False, gear=2))
-            #         world.player.set_velocity(carla.Vector3D(x=0.023124, y=3.754279, z=0.001853))
-            
-            # if msg is not None:
-            #     control(world, msg.data)
-                
-
-            # lane_assist.render_array()
 
     finally:
 
