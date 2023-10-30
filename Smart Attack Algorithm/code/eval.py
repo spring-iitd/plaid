@@ -45,7 +45,7 @@ scaler = load(os.path.join(data_dir, 'scaler.joblib'))
 seq_scaler = load(os.path.join(data_dir, 'seq_scaler.joblib'))
 
 mlp = load_model(os.path.join(data_dir, 'mlp.h5'))
-# lstm = load_model(os.paht.join(data_dir, 'lstm.h5'))
+lstm = load_model(os.path.join(data_dir, 'lstm.h5'))
 xgb = XGBClassifier()
 xgb.load_model(os.path.join(data_dir, 'xgb.json'))
 dt = load(os.path.join(data_dir, 'dt.pkl'))
@@ -71,7 +71,7 @@ mlp_preds = (mlp_preds >= threshold).astype(int)
 print("ACCURACY: ", accuracy_score(y, mlp_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y, mlp_preds))
 
-with open(os.path.join(data_dir,'evaluation_results.txt'),'w') as file:
+with open(os.path.join(data_dir,'eval_on_smart_attack.txt'),'w') as file:
     file.write("-------MLP-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y, mlp_preds)))
@@ -81,22 +81,22 @@ with open(os.path.join(data_dir,'evaluation_results.txt'),'w') as file:
     file.write("\n\n\n\n")
 
 
-# print("------LSTM------")
+print("------LSTM------")
 
-# lstm_preds = lstm.predict(X_seq)
-# lstm_preds = (lstm_preds >= threshold).astype(int)
+lstm_preds = lstm.predict(X_seq)
+lstm_preds = (lstm_preds >= threshold).astype(int)
 
-# print("ACCURACY: ", accuracy_score(y_seq, lstm_preds))
-# print("CLASSIFICATION REPORT:\n", classification_report(y_seq, lstm_preds))
+print("ACCURACY: ", accuracy_score(y_seq, lstm_preds))
+print("CLASSIFICATION REPORT:\n", classification_report(y_seq, lstm_preds))
 
-# with open(os.path.join(data_dir,'evaluation_results.txt'),'a') as file:
-#     file.write("-------LSTM-------\n")
-#     file.write(f"Accuracy Score: ")
-#     file.write(str(accuracy_score(y_seq, lstm_preds)))
-#     file.write("\n")
-#     file.write('Classification Report:\n')
-#     file.write(str(classification_report(y_seq, lstm_preds)))
-#     file.write("\n\n\n\n")
+with open(os.path.join(data_dir,"eval_on_smart_attack.txt"),'a') as file:
+    file.write("-------LSTM-------\n")
+    file.write(f"Accuracy Score: ")
+    file.write(str(accuracy_score(y_seq, lstm_preds)))
+    file.write("\n")
+    file.write('Classification Report:\n')
+    file.write(str(classification_report(y_seq, lstm_preds)))
+    file.write("\n\n\n\n")
 
 print("------XGBOOST------")
 
@@ -104,7 +104,7 @@ xgb_preds = xgb.predict(X)
 print("ACCURACY: ", accuracy_score(y, xgb_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y, xgb_preds))
 
-with open(os.path.join(data_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(data_dir,'eval_on_smart_attack.txt'),'a') as file:
     file.write("-------XGBOOST-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y, xgb_preds)))
@@ -119,7 +119,7 @@ dt_preds = dt.predict(X)
 print("ACCURACY: ", accuracy_score(y, dt_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y, dt_preds))
 
-with open(os.path.join(data_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(data_dir,'eval_on_smart_attack.txt'),'a') as file:
     file.write("-------Decision Tree-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y, dt_preds)))
@@ -134,7 +134,7 @@ rf_preds = rf.predict(X)
 print("ACCURACY: ", accuracy_score(y, rf_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y, rf_preds))
 
-with open(os.path.join(data_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(data_dir,'eval_on_smart_attack.txt'),'a') as file:
     file.write("-------Random Forest-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y, rf_preds)))

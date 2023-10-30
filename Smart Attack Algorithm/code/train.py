@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.utils import class_weight
-from imblearn.over_sampling import SMOTE
+# from imblearn.over_sampling import SMOTE
 import argparse
 from joblib import dump
 import matplotlib.pyplot as plt
@@ -36,8 +36,6 @@ data_path = os.path.join(base_dir, args.file_name)
 data = pd.read_csv(data_path)
 
 data.drop(['Timestamp'], axis = 1, inplace=True)
-
-data = data[:500_000]
 
 def hex_to_bin(hex_num):
     
@@ -69,15 +67,14 @@ def transform_data(data):
     return data
 
 def sequencify_data(X, y, seq_size=10):
-    
-    # Calculate the maximum index to be considered based on sequence size
-    max_index = (len(X) // seq_size) * seq_size
+    max_index = len(X) - seq_size + 1
 
     X_seq = []
     y_seq = []
+
     for i in range(0, max_index, seq_size):
-        X_seq.append(X[i:i+seq_size])
-        y_seq.append(1 if 1 in y[i:i+seq_size] else 0)
+        X_seq.append(X[i:i+seq_size])  # Append the sequence from DataFrame 'X'
+        y_seq.append(1 if 1 in y[i:i+seq_size] else 0)  # Check for '1' in 'y' values
 
     return np.array(X_seq), np.array(y_seq)
 
@@ -86,7 +83,7 @@ data = transform_data(data)
 X = data.drop('label', axis = 1)
 y = data['label']
 
-X_seq, y_seq = sequencify_data(X, y)
+X_seq, y_seq = sequencify_data(X.values, y.values)
 
 #Splitting into train and test
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, shuffle=True)
@@ -109,14 +106,14 @@ X_test_seq_reshaped = X_seq_test.reshape(num_test_samples, -1)
 X_train_seq_scaled = seq_scaler.fit_transform(X_train_seq_reshaped)
 X_test_seq_scaled = seq_scaler.transform(X_test_seq_reshaped)
 
-dump(scaler, os.path.join(base_dir, 'seq_scaler.joblib'))
+dump(seq_scaler, os.path.join(base_dir, 'seq_scaler.joblib'))
 
 # Reshape the scaled data back to the original shape
 X_seq_train = X_train_seq_scaled.reshape(num_train_samples, seq_length, num_features)
 X_seq_test = X_test_seq_scaled.reshape(num_test_samples, seq_length, num_features)
 
-oversample = SMOTE()
-X_train_smote, y_train_smote = oversample.fit_resample(X_train, y_train) 
+# oversample = SMOTE()
+# X_train_smote, y_train_smote = oversample.fit_resample(X_train, y_train) 
 
 ##Models
 
@@ -134,7 +131,7 @@ mlp.compile(optimizer='adam',
 
 es = EarlyStopping(monitor = 'val_loss', patience = 15, restore_best_weights = True)
 
-mlp_hist = mlp.fit(X_train_smote, y_train_smote, epochs=100, callbacks = [es], validation_split=0.2, batch_size = 128)
+mlp_hist = mlp.fit(X_train, y_train, epochs=100, callbacks = [es], validation_split=0.2, batch_size = 128)
 
 ##MLP
 print("-----MLP-------")
@@ -168,51 +165,51 @@ plt.savefig(os.path.join(base_dir,'mlp_training_history.png'))
 
 ##LSTM
 
-# print("-----LSTM-------")
+print("-----LSTM-------")
 
-# lstm = Sequential()
+lstm = Sequential()
 
-# lstm.add(Input(shape = X_seq_train.shape[1:]))
-# lstm.add(LSTM(128, activation = 'relu'))
-# lstm.add(Dense(1, activation = 'sigmoid'))
+lstm.add(Input(shape = X_seq_train.shape[1:]))
+lstm.add(LSTM(128, activation = 'relu'))
+lstm.add(Dense(1, activation = 'sigmoid'))
 
-# lstm.compile(
-#     loss = 'binary_crossentropy',
-#     optimizer = 'adam',
-#     metrics = ['accuracy'])
+lstm.compile(
+    loss = 'binary_crossentropy',
+    optimizer = 'adam',
+    metrics = ['accuracy'])
 
-# es = EarlyStopping(monitor = 'val_loss', patience = 15, restore_best_weights = True)
+es = EarlyStopping(monitor = 'val_loss', patience = 15, restore_best_weights = True)
 
-# lstm_hist = lstm.fit(X_seq_train, y_seq_train, batch_size = 64, validation_split = 0.2,
-#         callbacks = [es], epochs = 1000)
+lstm_hist = lstm.fit(X_seq_train, y_seq_train, batch_size = 128, validation_split = 0.2,
+        callbacks = [es], epochs = 1000)
 
-# print("-----LSTM-------")
+print("-----LSTM-------")
 
-# lstm_preds = lstm.predict(X_seq_test, batch_size=4096)
-# lstm_preds = (lstm_preds >= threshold).astype(int)
+lstm_preds = lstm.predict(X_seq_test, batch_size=4096)
+lstm_preds = (lstm_preds >= threshold).astype(int)
 
-# print("ACCURACY: ", accuracy_score(y_seq_test, lstm_preds))
-# print("CLASSIFICATION REPORT:\n", classification_report(y_seq_test, lstm_preds))
+print("ACCURACY: ", accuracy_score(y_seq_test, lstm_preds))
+print("CLASSIFICATION REPORT:\n", classification_report(y_seq_test, lstm_preds))
 
-# with open(os.path.join(base_dir,'evaluation_results.txt'),'w') as file:
-#     file.write("-------LSTM-------\n")
-#     file.write(f"Accuracy Score: ")
-#      file.write(str(accuracy_score(y_test, lstm_preds)))
-#      file.write("\n")
-#     file.write('Classification Report:\n')
-#     file.write(str(classification_report(y_test, lstm_preds)))
-#     file.write("\n\n\n\n")
+with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
+    file.write("-------LSTM-------\n")
+    file.write(f"Accuracy Score: ")
+    file.write(str(accuracy_score(y_seq_test, lstm_preds)))
+    file.write("\n")
+    file.write('Classification Report:\n')
+    file.write(str(classification_report(y_seq_test, lstm_preds)))
+    file.write("\n\n\n\n")
 
-# lstm.save(os.path.join(base_dir, 'lstm.h5'))
+lstm.save(os.path.join(base_dir, 'lstm.h5'))
 
-# plt.figure(figsize=(10, 10))
-# plt.plot(lstm_hist.history['loss'])
-# plt.plot(lstm_hist.history['val_loss'])
-# plt.title('LSTM Model loss')
-# plt.ylabel('Loss')
-# plt.xlabel('Epoch')
-# plt.legend(['Train', 'Validation'], loc='upper left')
-# plt.savefig(os.path.join(base_dir,'mlp_training_history.png'))
+plt.figure(figsize=(10, 10))
+plt.plot(lstm_hist.history['loss'])
+plt.plot(lstm_hist.history['val_loss'])
+plt.title('LSTM Model loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validation'], loc='upper left')
+plt.savefig(os.path.join(base_dir,'lstm_training_history.png'))
 
 
 ## XGBOOST
@@ -239,13 +236,13 @@ dt = DecisionTreeClassifier(max_depth = 4)
 dt.fit(X_train, y_train)
 dt_preds = dt.predict(X_test)
 
-print("-------DECISION TREE--------\n")
+print("-------DECISION TREE--------")
 print("ACCURACY: ", accuracy_score(y_test, dt_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_test, dt_preds))
 dump(dt, os.path.join(base_dir, 'dt.pkl'))
 
 with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
-    file.write("-------Decision Tree-------")
+    file.write("-------Decision Tree-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_test, dt_preds)))
     file.write("\n")
