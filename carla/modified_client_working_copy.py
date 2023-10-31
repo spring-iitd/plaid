@@ -1242,12 +1242,15 @@ def game_loop(args):
             world.tick(clock)
             try:
                 can_bus = can.interface.Bus('vcan0', bustype='socketcan')
-                #msg = can_bus.recv()
-                #print(msg)
-                #if msg is not None:
-                    #hud.can.recv_steer(msg,hud,world)
-                    #hud.can.recv_throttle(msg,hud,world)
-                    #hud.can.recv_brake(msg,hud,world)
+                msg = can_bus.recv(0)
+                print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                print(msg)
+                if msg is not None:
+                    #pass
+                    print("-----------------------------------------------------------------------")
+                    hud.can.recv_steer(msg,hud,world)
+                    hud.can.recv_throttle(msg,hud,world)
+                    hud.can.recv_brake(msg,hud,world)
                     #hud.can.recv_gear(msg,hud,world)
             except:
                 return 0  
@@ -1269,9 +1272,10 @@ def game_loop(args):
                 # th3.join()
                 # th4.join() 
 
-            if controller.parse_events(client, world, clock):
-                return
-
+            # if controller.parse_events(client, world, clock):
+            #     return
+            # sleep for 1 ms
+            time.sleep(0.001)
             world.render(display)
             pygame.display.flip()
         
