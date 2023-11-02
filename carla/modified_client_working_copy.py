@@ -371,8 +371,8 @@ class World(object):
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
             spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
-            #spawn_point = carla.Transform(carla.Location(x=-113.403503, y=-25.767477, z=0.599995), carla.Rotation(pitch=0.000000, yaw=90.642235, roll=0.000000))
+            #spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            spawn_point = carla.Transform(carla.Location(x=-113.403503, y=-25.767477, z=0.599995), carla.Rotation(pitch=0.000000, yaw=90.642235, roll=0.000000))
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
             
         # Set up the sensors.
@@ -711,7 +711,7 @@ class HUD(object):
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
         #self.can.send_car_speed(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
-        print("velocity : ",3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        #print("velocity : ",3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
         # print("message:", self.can.can_bus.recv(0))
         self._info_text = [
             'Server:  % 16.0f FPS' % self.server_fps,
@@ -737,7 +737,7 @@ class HUD(object):
             #self.can.send_brake(c.brake)
             #print('c.brake:',c.brake)
             #self.can.send_gear(c.gear,c.manual_gear_shift)
-            print('c.gear: ', c.gear)
+            #print('c.gear: ', c.gear)
 
             
 
@@ -1236,21 +1236,21 @@ def game_loop(args):
         controller = KeyboardControl(world, args.autopilot)
 
         clock = pygame.time.Clock()
-
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        can_bus.flush_tx_buffer()
         while True:
             clock.tick_busy_loop(60)
             world.tick(clock)
             try:
-                can_bus = can.interface.Bus('vcan0', bustype='socketcan')
-                msg = can_bus.recv(0)
+                msg = can_bus.recv(1)
                 print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
                 print(msg)
                 if msg is not None:
-                    #pass
-                    print("-----------------------------------------------------------------------")
-                    hud.can.recv_steer(msg,hud,world)
+                    
+                    #print("-----------------------------------------------------------------------")
+                    #hud.can.recv_steer(msg,hud,world)
                     hud.can.recv_throttle(msg,hud,world)
-                    hud.can.recv_brake(msg,hud,world)
+                    #hud.can.recv_brake(msg,hud,world)
                     #hud.can.recv_gear(msg,hud,world)
             except:
                 return 0  
