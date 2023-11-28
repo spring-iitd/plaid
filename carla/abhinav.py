@@ -223,7 +223,7 @@ class CAN(object):
                 return
                   
             throttle_data = self.throttle_message.decode(msg.data)
-            world.player.apply_control(carla.VehicleControl(throttle=throttle_data['GAS_PRESSED'])) 
+            world.player.apply_control(carla.VehicleControl(throttle=throttle_data['GAS_PRESSED'], brake=throttle_data['BRAKE_PRESSED'])) 
         except:
             return 0
 
@@ -300,6 +300,7 @@ class World(object):
     def __init__(self, carla_world, hud, args, lane_assist):
         print('world reach 1')
         self.world = carla_world
+        # self.set_enviroment()
         self.actor_role_name = args.rolename
         try:
             self.map = self.world.get_map()
@@ -323,22 +324,96 @@ class World(object):
         self._weather_index = 0
         self._actor_filter = args.filter
         self._gamma = args.gamma
+
+        for actor in self.world.get_actors():
+            actor.destroy()
+
         print('world reach 3.1')
         self.restart()
         print('world reach 4')
         self.world.on_tick(hud.on_world_tick)
         self.recording_enabled = False
         self.recording_start = 0
+
         print('world reach 5')
 
 
-    def set_enviroment(self):
-        self.world.set_weather(carla.WeatherParameters(cloudiness = 0.0,sun_altitude_angle=70.0))
-        settings = self.world.get_settings()
-        settings.time_of_the_day = 12
-        settings.weather_id = 1
-        settings.number_of_vehicles = 5
-        settings.number_of_Walkers = 2
+    def set_enviroment(self, weather_params, num_vehicles, num_walkers):
+        # self.world.set_weather(carla.WeatherParameters(cloudiness = 0.0,sun_altitude_angle=70.0))
+        # settings = self.world.get_settings()
+        # settings.time_of_the_day = 12
+        # settings.weather_id = 1
+        # settings.number_of_vehicles = 5
+        # settings.number_of_Walkers = 2
+        # self.world.apply_settings(settings)
+
+        def change_weather(world, weather_parameters):
+            # Get the current weather
+            current_weather = world.get_weather()
+
+            # Modify the weather parameters
+            current_weather.cloudiness = weather_parameters['cloudiness']
+            current_weather.precipitation = weather_parameters['precipitation']
+            current_weather.precipitation_deposits = weather_parameters['precipitation_deposits']
+            current_weather.wind_intensity = weather_parameters['wind_intensity']
+            current_weather.sun_azimuth = weather_parameters['sun_azimuth']
+            current_weather.sun_altitude = weather_parameters['sun_altitude']
+            current_weather.fog_density = weather_parameters['fog_density']
+            current_weather.fog_distance = weather_parameters['fog_distance']
+
+            # Apply the new weather
+            world.set_weather(current_weather)
+
+        def spawn_vehicles_walkers(world, number_of_vehicles, number_of_walkers):
+            # Get the blueprint library
+
+            blueprint_library = world.get_blueprint_library()
+
+            # Get all available vehicle blueprints
+            vehicle_blueprints = [bp for bp in blueprint_library.filter('vehicle.*')]
+            walker_blueprints = [bp for bp in blueprint_library.filter('walker.*')]
+
+            print('#VEHICLE_BLUEPRINTS =', len(vehicle_blueprints))
+            print('#WALKER_BLUEPRINTS =', len(walker_blueprints))
+            
+            selected_vehicle_blueprints = vehicle_blueprints[0:min(number_of_vehicles, len(vehicle_blueprints))]
+            selected_walker_blueprints = walker_blueprints[0:min(number_of_walkers, len(walker_blueprints))]
+            
+            spawn_points = world.get_map().get_spawn_points()
+            print('#SPAWN_POINTS =', len(spawn_points))
+            
+            print('SPAWNING VEHICLES')
+            count = 0
+            i = 0
+            while (count < num_vehicles):
+                print(i, count)
+
+                blueprint = selected_vehicle_blueprints[i%len(selected_vehicle_blueprints)]
+                spawn_point = spawn_points[i%len(spawn_points)]
+                vehicle = world.try_spawn_actor(blueprint, spawn_point)
+                if (vehicle is not None):
+                    count += 1
+                    print(f"Spawned {vehicle.type_id} at {spawn_point.location}")
+                
+                i+=1
+            
+            print('SPAWNING WALKERS')
+            count = 0
+            i = 0
+            while (count < num_walkers):
+                print(i, count)
+
+                blueprint = selected_walker_blueprints[i%len(selected_walker_blueprints)]
+                spawn_point = spawn_points[i%len(spawn_points)]
+                walker = world.try_spawn_actor(blueprint, spawn_point)
+                if (walker is not None):
+                    count += 1
+                    print(f"Spawned {walker.type_id} at {spawn_point.location}")
+                
+                i+=1
+
+        change_weather(self.world, weather_params)
+        spawn_vehicles_walkers(self.world, num_vehicles, num_walkers)
 
     def restart(self):
         self.player_max_speed = 1.589
@@ -351,6 +426,8 @@ class World(object):
         # Get a specific blueprint by its unique ID
         blueprint_id = 'vehicle.mini.cooper_s'  # Replace with the ID of the blueprint you want
         blueprint = self.world.get_blueprint_library().find(blueprint_id)
+        #print("blue printttt", blueprint)
+        #exit()
         #blueprint = random.choice(self.world.get_blueprint_library().filter(self._actor_filter))
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('color'):
@@ -391,10 +468,13 @@ class World(object):
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
             spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            spawn_point = spawn_points[100]  #! SPAWN POINT
+            # spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            print("reach 1.3")
             #spawn_point = carla.Transform(carla.Location(x=-113.403503, y=-25.767477, z=0.599995), carla.Rotation(pitch=0.000000, yaw=90.642235, roll=0.000000))
+            print("reach 1.4")
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
-            
+            print("reach 1.5")
         # Set up the sensors.
         print("setting up sensors")
         self.collision_sensor = CollisionSensor(self.player, self.hud)
@@ -1236,6 +1316,34 @@ class CameraManager(object):
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
 
+import random
+
+
+
+# weather_params = {
+#     'cloudiness': random.uniform(0, 100),
+#     'precipitation': random.uniform(0, 100),
+#     'precipitation_deposits': random.uniform(0, 100),
+#     'wind_intensity': random.uniform(0, 100),
+#     'sun_azimuth': random.uniform(0, 360),
+#     'sun_altitude': random.uniform(0, 90),
+#     'fog_density': random.uniform(0, 100),
+#     'fog_distance': random.uniform(0, 100),
+# }
+
+
+weather_params = {
+    'cloudiness': 00,
+    'precipitation': 00,
+    'precipitation_deposits': 00,
+    'wind_intensity': 00,
+    'sun_azimuth': 0,
+    'sun_altitude': 50,
+    'fog_density': 00,
+    'fog_distance': 00,
+}
+num_vehicles = 0
+num_walkers = 0
 
 def game_loop(args):
     pygame.init()
@@ -1245,8 +1353,10 @@ def game_loop(args):
     try:
         client = carla.Client(args.host, args.port)
         print("connected to server")
+        print(client.get_available_maps())
+        print ('adsf')
         client.set_timeout(2.0)
-
+        print ('hello')
         display = pygame.display.set_mode(
             (args.width, args.height),
             pygame.HWSURFACE | pygame.DOUBLEBUF)
@@ -1254,18 +1364,16 @@ def game_loop(args):
         print("creating hud object")
         print('reach 0')
         hud = HUD(args.width, args.height)
-        # print('reach 0.1')
         # can = CAN()
         lane_assist = LaneAssist()
-        # print('reach 0.15')
+
+        # carla_world = client.load_world('Town03')
+        # world = World(carla_world, hud, args, lane_assist)
         world = World(client.get_world(), hud, args, lane_assist)
-        # print('reach 0.2')
         controller = KeyboardControl(world, args.autopilot)
-        #world.set_enviroment()
+        world.set_enviroment(weather_params, num_vehicles, num_walkers)
         clock = pygame.time.Clock()
-        # print('reach 0.3')
         can_bus = can.interface.Bus('vcan0', bustype='socketcan')
-        # print('reach 0.4')
         can_bus.flush_tx_buffer()
         print('reach 1')
         abh = 0
@@ -1282,11 +1390,11 @@ def game_loop(args):
                 if msg is not None:
                     # print('RECVED MSG: <<<{}>>>'.format(msg))
                     if (msg.arbitration_id == hud.can.throttle_message.frame_id):
-                        print('GOT THROTTLE MSG')
+                        print('GOT THROTTLE/BRAKE MSG')
                         hud.can.recv_throttle(msg,hud,world)
-                    elif (msg.arbitration_id == hud.can.brake_message.frame_id):
-                        print('GOT BRAKE MSG')              #! since it has same arb id as throttle, need to handle it separately, otherwise throtttle doesnt work 
-                        hud.can.recv_brake(msg,hud,world)
+                    # elif (msg.arbitration_id == hud.can.brake_message.frame_id):
+                    #     print('GOT BRAKE MSG')              #! since it has same arb id as throttle, need to handle it separately, otherwise throtttle doesnt work 
+                    #     hud.can.recv_brake(msg,hud,world)
                     elif (msg.arbitration_id == hud.can.gear_message.frame_id):
                         print('GOT GEAR MSG')
                         hud.can.recv_gear(msg,hud,world)
@@ -1299,20 +1407,6 @@ def game_loop(args):
                 
                 
                 
-                # th1 = Thread(target=hud.can.recv_steer,args=(msg,hud,world))
-                # th2 = Thread(target=hud.can.recv_throttle,args=(msg,hud,world))
-                # th3 = Thread(target=hud.can.recv_brake,args=(msg,hud,world))
-                # th4 = Thread(target=hud.can.recv_gear,args=(msg,hud,world))
-
-                # th1.start()
-                # th2.start()
-                # th3.start()
-                # th4.start()
-
-                # th1.join()
-                # th2.join()
-                # th3.join()
-                # th4.join() 
 
             # if controller.parse_events(client, world, clock):
             #     return
