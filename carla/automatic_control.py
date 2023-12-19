@@ -21,6 +21,8 @@ import numpy.random as random
 import re
 import sys
 import weakref
+import cantools
+import can
 
 try:
     import pygame
@@ -347,6 +349,134 @@ class KeyboardControl(object):
         """Shortcut for quitting"""
         return (key == K_ESCAPE) or (key == K_q and pygame.key.get_mods() & KMOD_CTRL)
 
+
+# ==============================================================================
+# -- CAN -----------------------------------------------------------------------
+# ==============================================================================
+
+
+class CAN(object):
+    def __init__(self):
+        self.db = cantools.database.load_file('./honda.dbc')
+        #self.can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        #self.speed_message = self.db.get_message_by_name('WHEEL_SPEEDS')
+        #self.speed_message = self.db.get_message_by_name('CAR_SPEED')
+        self.steer_message = self.db.get_message_by_name('STEERING_SENSORS')
+        self.gear_message = self.db.get_message_by_name('GEARBOX')
+        self.throttle_message = self.db.get_message_by_name('POWERTRAIN_DATA')
+        self.brake_message = self.db.get_message_by_name('POWERTRAIN_DATA')
+
+    # def send_car_speed(self, speed):
+    #     can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+    #     data = self.speed_message.encode({'CAR_SPEED': speed})
+    #     message = can.Message(arbitration_id=self.speed_message.frame_id, data=data)
+    #     print("MESSAGE SPEED: ", message)
+    #     can_bus.send(message)
+
+    def send_throttle(self, throttle):
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        data = self.throttle_message.encode({'PEDAL_GAS':250,'ENGINE_RPM':14000,'GAS_PRESSED':throttle,'ACC_STATUS':0,'BOH_17C':1,'BRAKE_SWITCH':1,'BOH2_17C':1,'BRAKE_PRESSED':0,'BOH3_17C':0})
+        message = can.Message(arbitration_id=self.throttle_message.frame_id, data=data)
+        print("MESSAGE THROTTLE: ", message)
+        can_bus.send(message)
+
+    def send_brake(self, brake):
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        data = self.brake_message.encode({'PEDAL_GAS':50,'ENGINE_RPM':1000,'GAS_PRESSED':0,'ACC_STATUS':0,'BOH_17C':0,'BRAKE_SWITCH':0,'BOH2_17C':0,'BRAKE_PRESSED':brake,'BOH3_17C':0})
+        message = can.Message(arbitration_id=self.brake_message.frame_id, data=data)
+        print("MESSAGE BRAKE: ", message)
+        can_bus.send(message)
+
+    def send_steering(self, steer):
+        print("can steer paclet value",steer*500)
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        data = self.steer_message.encode({'STEER_ANGLE': steer * 500})
+        message = can.Message(arbitration_id=self.steer_message.frame_id, data=data)
+        print("MESSAGE STEER: ", message)
+        can_bus.send(message)
+
+
+    def send_gear(self,gear,manual_gear_shift):
+        can_bus = can.interface.Bus('vcan0', bustype = 'socketcan')
+        if manual_gear_shift:    #1 for manual and 0 for auto transmission
+            data = self.gear_message.encode({'GEAR_SHIFTER': 1, 'GEAR': gear})   
+        else:
+            data = self.gear_message.encode({'GEAR_SHIFTER': 0, 'GEAR': gear})
+
+        message = can.Message(arbitration_id=self.gear_message.frame_id, data=data)
+        print("MESSAGE GEAR: ", message)
+        can_bus.send(message)  
+
+    """ def recv_throttle(self,msg,hud,world):
+        #can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        #while True:
+        try:
+            #msg = self.can_bus.recv()  # wait 0.5 sec to get msg then raise error
+            throttle_id = msg.arbitration_id
+            #print("idddddddd",self.throttle_message.frame_id)
+            if throttle_id != self.throttle_message.frame_id:
+                print("not a throttle msg")
+                return
+                  
+            throttle_data = self.throttle_message.decode(msg.data)
+            world.player.apply_control(carla.VehicleControl(throttle=throttle_data['GAS_PRESSED'])) 
+        except:
+            return 0
+
+    def recv_gear(self,msg,hud,world):
+        #can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        #while True:
+        try:
+            #msg = self.can_bus.recv()  # wait 0.5 sec to get msg then raise error
+            #if msg is not None:
+                #gear_data = hud.can.gear_message.decode(msg.data)
+            gear_data = self.gear_message.decode(msg.data)
+            if gear_data['GEAR_SHIFTER']:
+                world.player.set_autopilot(False)
+                world.player.apply_control(carla.VehicleControl(gear=gear_data['GEAR']))
+            else:
+                world.player.set_autopilot(True)
+                world.player.apply_control(carla.VehicleControl(gear=gear_data['GEAR']))
+
+            #world.player.apply_control(carla.VehicleControl(manual=gear_data['GEAR_SHIFTER']))
+                
+        except:
+            return 0
+
+    def recv_steer(self,msg,hud,world):
+        #can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        #while True:
+        try:
+            #msg = self.can_bus.recv()  # wait 0.5 sec to get msg then raise error
+            #if msg is not None:
+            steer_id = msg.arbitration_id
+            #print("idddddddd",self.throttle_message.frame_id)
+            if steer_id != self.steer_message.frame_id:
+                print("not a steer msg")
+                return
+            steer_data = self.steer_message.decode(msg.data)
+            world.player.apply_control(carla.VehicleControl(steer=int(steer_data['STEER_ANGLE'])))
+        except:
+            return 0
+
+
+    def recv_brake(self,msg,hud,world):
+        #print("inside recv_brake")
+        #can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        #while True:
+        try:
+            brake_id = msg.arbitration_id
+            #print("idddddddd",self.throttle_message.frame_id)
+            if brake_id != self.brake_message.frame_id:
+                print("not a brake msg")
+                return
+            #msg = self.can_bus.recv()  # wait 0.5 sec to get msg then raise error
+            brake_data = self.brake_message.decode(msg.data)
+            world.player.apply_control(carla.VehicleControl(brake=brake_data['BRAKE_PRESSED']))
+        except:
+            return 0 """
+
+
 # ==============================================================================
 # -- HUD -----------------------------------------------------------------------
 # ==============================================================================
@@ -367,6 +497,8 @@ class HUD(object):
         self._font_mono = pygame.font.Font(mono, 12 if os.name == 'nt' else 14)
         self._notifications = FadingText(font, (width, 40), (0, height - 40))
         self.help = HelpText(pygame.font.Font(mono, 24), width, height)
+        print("creating CAN object")
+        self.can = CAN()
         self.server_fps = 0
         self.frame = 0
         self.simulation_time = 0
@@ -414,6 +546,15 @@ class HUD(object):
             'Height:  % 18.0f m' % transform.location.z,
             '']
         if isinstance(control, carla.VehicleControl):
+            self.can.send_steering(control.steer)
+            print('c.steer: ', control.steer)
+            self.can.send_throttle(int(control.throttle))
+            print("throttle message:",control.throttle)
+            self.can.send_brake(control.brake)
+            print('c.brake:',control.brake)
+            self.can.send_gear(control.gear,control.manual_gear_shift)
+            print('c.gear: ', control.gear)
+
             self._info_text += [
                 ('Throttle:', control.throttle, 0.0, 1.0),
                 ('Steer:', control.steer, -1.0, 1.0),
@@ -799,7 +940,7 @@ weather_params = {
     'wind_intensity': 10,
     'sun_azimuth': 0,
     'sun_altitude': 50,
-    'fog_density': 10,
+    'fog_density': 00,
     'fog_distance': 00,
 }
 num_vehicles = 0
@@ -856,10 +997,12 @@ def game_loop(args):
         spawn_points = world.map.get_spawn_points()
         #print(spawn_points[0].location)
         #destination = random.choice(spawn_points[0]).location
-        destination = spawn_points[1].location
+        destination = spawn_points[4].location
         agent.set_destination(destination)
 
         clock = pygame.time.Clock()
+        can_bus = can.interface.Bus('vcan0', bustype='socketcan')
+        can_bus.flush_tx_buffer()
 
         while True:
             clock.tick()
