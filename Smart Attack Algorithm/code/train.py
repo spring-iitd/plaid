@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.utils import class_weight
-# from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import SMOTE
 import argparse
 from joblib import dump
 import matplotlib.pyplot as plt
@@ -33,6 +33,8 @@ args = parser.parse_args()
 
 base_dir = args.directory
 data_path = os.path.join(base_dir, args.file_name)
+save_loc = os.path.join(base_dir, 'Traditional DoS Training and Testing')
+os.makedirs(save_loc, exist_ok = True)
 data = pd.read_csv(data_path)
 
 data.drop(['Timestamp'], axis = 1, inplace=True)
@@ -94,7 +96,7 @@ scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
-dump(scaler, os.path.join(base_dir, 'scaler.joblib'))
+dump(scaler, os.path.join(save_loc, 'scaler.joblib'))
 
 seq_scaler = StandardScaler()
 num_train_samples, seq_length, num_features = X_seq_train.shape
@@ -106,14 +108,14 @@ X_test_seq_reshaped = X_seq_test.reshape(num_test_samples, -1)
 X_train_seq_scaled = seq_scaler.fit_transform(X_train_seq_reshaped)
 X_test_seq_scaled = seq_scaler.transform(X_test_seq_reshaped)
 
-dump(seq_scaler, os.path.join(base_dir, 'seq_scaler.joblib'))
+dump(seq_scaler, os.path.join(save_loc, 'seq_scaler.joblib'))
 
 # Reshape the scaled data back to the original shape
 X_seq_train = X_train_seq_scaled.reshape(num_train_samples, seq_length, num_features)
 X_seq_test = X_test_seq_scaled.reshape(num_test_samples, seq_length, num_features)
 
-# oversample = SMOTE()
-# X_train_smote, y_train_smote = oversample.fit_resample(X_train, y_train) 
+oversample = SMOTE()
+X_train_smote, y_train_smote = oversample.fit_resample(X_train, y_train) 
 
 ##Models
 
@@ -129,9 +131,9 @@ mlp.compile(optimizer='adam',
                 loss='binary_crossentropy',
                 metrics=['accuracy'])
 
-es = EarlyStopping(monitor = 'val_loss', patience = 15, restore_best_weights = True)
+es = EarlyStopping(monitor = 'val_loss', patience = 5, restore_best_weights = True)
 
-mlp_hist = mlp.fit(X_train, y_train, epochs=100, callbacks = [es], validation_split=0.2, batch_size = 128)
+mlp_hist = mlp.fit(X_train_smote, y_train_smote, epochs=100, callbacks = [es], validation_split=0.2, batch_size = 128)
 
 ##MLP
 print("-----MLP-------")
@@ -143,7 +145,7 @@ mlp_preds = (mlp_preds >= threshold).astype(int)
 print("ACCURACY: ", accuracy_score(y_test, mlp_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_test, mlp_preds))
 
-with open(os.path.join(base_dir,'evaluation_results.txt'),'w') as file:
+with open(os.path.join(save_loc,'evaluation_results.txt'),'w') as file:
     file.write("-------MLP-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_test, mlp_preds)))
@@ -152,7 +154,7 @@ with open(os.path.join(base_dir,'evaluation_results.txt'),'w') as file:
     file.write(str(classification_report(y_test, mlp_preds)))
     file.write("\n\n\n\n")
 
-mlp.save(os.path.join(base_dir, 'mlp.h5'))
+mlp.save(os.path.join(save_loc, 'mlp.h5'))
 
 plt.figure(figsize=(10, 10))
 plt.plot(mlp_hist.history['loss'])
@@ -161,7 +163,7 @@ plt.title('MLP Model loss')
 plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
-plt.savefig(os.path.join(base_dir,'mlp_training_history.png'))
+plt.savefig(os.path.join(save_loc,'mlp_training_history.png'))
 
 ##LSTM
 
@@ -178,7 +180,7 @@ lstm.compile(
     optimizer = 'adam',
     metrics = ['accuracy'])
 
-es = EarlyStopping(monitor = 'val_loss', patience = 15, restore_best_weights = True)
+es = EarlyStopping(monitor = 'val_loss', patience = 5, restore_best_weights = True)
 
 lstm_hist = lstm.fit(X_seq_train, y_seq_train, batch_size = 128, validation_split = 0.2,
         callbacks = [es], epochs = 1000)
@@ -191,7 +193,7 @@ lstm_preds = (lstm_preds >= threshold).astype(int)
 print("ACCURACY: ", accuracy_score(y_seq_test, lstm_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_seq_test, lstm_preds))
 
-with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(save_loc,'evaluation_results.txt'),'a') as file:
     file.write("-------LSTM-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_seq_test, lstm_preds)))
@@ -200,7 +202,7 @@ with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
     file.write(str(classification_report(y_seq_test, lstm_preds)))
     file.write("\n\n\n\n")
 
-lstm.save(os.path.join(base_dir, 'lstm.h5'))
+lstm.save(os.path.join(save_loc, 'lstm.h5'))
 
 plt.figure(figsize=(10, 10))
 plt.plot(lstm_hist.history['loss'])
@@ -209,20 +211,20 @@ plt.title('LSTM Model loss')
 plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper left')
-plt.savefig(os.path.join(base_dir,'lstm_training_history.png'))
+plt.savefig(os.path.join(save_loc,'lstm_training_history.png'))
 
 
 ## XGBOOST
 xgb = XGBClassifier()
-xgb.fit(X_train, y_train)
+xgb.fit(X_train_smote, y_train_smote)
 xgb_preds = xgb.predict(X_test)
 
 print("-------XGBOOST-------")
 print("ACCURACY: ", accuracy_score(y_test, xgb_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_test, xgb_preds))
-xgb.save_model(os.path.join(base_dir, 'xgb.json'))
+xgb.save_model(os.path.join(save_loc, 'xgb.json'))
 
-with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(save_loc,'evaluation_results.txt'),'a') as file:
     file.write("-------XGB-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_test, xgb_preds)))
@@ -233,15 +235,15 @@ with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
 
 ## DECISION TREE
 dt = DecisionTreeClassifier(max_depth = 4)
-dt.fit(X_train, y_train)
+dt.fit(X_train_smote, y_train_smote)
 dt_preds = dt.predict(X_test)
 
 print("-------DECISION TREE--------")
 print("ACCURACY: ", accuracy_score(y_test, dt_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_test, dt_preds))
-dump(dt, os.path.join(base_dir, 'dt.pkl'))
+dump(dt, os.path.join(save_loc, 'dt.pkl'))
 
-with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(save_loc,'evaluation_results.txt'),'a') as file:
     file.write("-------Decision Tree-------\n")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_test, dt_preds)))
@@ -253,15 +255,15 @@ with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
 ## RANDOM FOREST
 
 rf = RandomForestClassifier(n_estimators=100, max_depth=4)
-rf.fit(X_train, y_train)
+rf.fit(X_train_smote, y_train_smote)
 rf_preds = rf.predict(X_test)
 
 print("-------RANDOM FOREST-------\n")
 print("ACCURACY: ", accuracy_score(y_test, rf_preds))
 print("CLASSIFICATION REPORT:\n", classification_report(y_test, rf_preds))
-dump(rf, os.path.join(base_dir, 'rf.pkl'))
+dump(rf, os.path.join(save_loc, 'rf.pkl'))
 
-with open(os.path.join(base_dir,'evaluation_results.txt'),'a') as file:
+with open(os.path.join(save_loc,'evaluation_results.txt'),'a') as file:
     file.write("-------Random Forest-------")
     file.write(f"Accuracy Score: ")
     file.write(str(accuracy_score(y_test, rf_preds)))
