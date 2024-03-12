@@ -8,6 +8,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, Callback
 from joblib import dump
+from tensorflow.distribute import MirroredStrategy
 
 data_path = "fixeddelta020take2.log"
 
@@ -58,47 +59,47 @@ scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
+
+
 input_dim = X_train.shape[1]
 
-model = Sequential()
+strat = MirroredStrategy()
 
-##Encoder
-model.add(Dense(input_dim, input_shape=(input_dim, ), activation='relu'))
-model.add(Dense(3, activation='relu'))
-model.add(Dense(2, activation='relu'))
+# Define reduceLR callback
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1,
+                              patience=5, verbose = 1)
 
-##Bottleneck
-model.add(Dense(1, activation='relu'))
+# Define early stopping callback
+early_stopper = EarlyStopping(monitor='val_loss', patience=15, 
+                              restore_best_weights=True, verbose = 1)
 
-##Decoder
-model.add(Dense(2, activation='relu'))
-model.add(Dense(3, activation='relu'))
-model.add(Dense(input_dim))
-
-
-class LearningRateLogger(Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        lr = self.model.optimizer.lr
-        print(f'Learning rate at epoch {epoch + 1}: {lr}')
-
-        # Save learning rate to a list for plotting
-        if 'learning_rates' not in self.model.history.history:
-            self.model.history.history['learning_rates'] = []
-        self.model.history.history['learning_rates'].append(lr)
 
 EPOCHS = 1000
 BATCH_SIZE = 32
 LOSS = 'mse'
 
-reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1,
-                              patience=20)
 
-# Define early stopping callback
-early_stopper = EarlyStopping(monitor='val_loss', patience=60, restore_best_weights=True)
+with strat.scope():
+     
+    model = Sequential()
+    
+    ##Encoder
+    model.add(Dense(input_dim, input_shape=(input_dim, ), activation='relu'))
+    model.add(Dense(3, activation='relu'))
+    model.add(Dense(2, activation='relu'))
 
-model.compile(optimizer='adam', loss=LOSS)
+    ##Bottleneck
+    model.add(Dense(1, activation='relu'))
 
-history = model.fit(X_train, X_train, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=(X_test, X_test), callbacks=[reduce_lr, early_stopper, LearningRateLogger()])
+    ##Decoder
+    model.add(Dense(2, activation='relu'))
+    model.add(Dense(3, activation='relu'))
+    model.add(Dense(input_dim))
+
+
+    model.compile(optimizer='adam', loss=LOSS)
+
+history = model.fit(X_train, X_train, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=(X_test, X_test), callbacks=[reduce_lr, early_stopper])
 
 
 model.save('ae.h5')
@@ -111,12 +112,4 @@ plt.ylabel('Loss')
 plt.legend()
 plt.title('Loss Curves')
 plt.savefig('loss_curve.png')
-plt.close()
-
-# Plot and save the learning rate schedule
-plt.plot(range(1, len(history.history['learning_rates']) + 1), history.history['learning_rates'])
-plt.xlabel('Epoch')
-plt.ylabel('Learning Rate')
-plt.title('Learning Rate Schedule')
-plt.savefig('learning_rate_schedule.png')
 plt.close()
