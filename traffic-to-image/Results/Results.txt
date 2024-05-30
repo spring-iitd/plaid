@@ -1,0 +1,162 @@
+Attack dataset:
+Distinct CAN IDs:
+['0000' '0002' '00a0' '00a1' '0130' '0131' '0140' '0153' '018f' '01f1'
+ '0260' '02a0' '02c0' '0316' '0329' '0350' '0370' '0430' '043f' '0440'
+ '04b1' '04f0' '0545' '05a0' '05a2' '05f0' '0690']
+
+sorted on basis of average-interval:
+   can_id  average_interval (in ms)  std_deviation  no_of_occurences
+0    0000                  3.870938       0.067848            587521
+4    0130                 16.849328       0.062456            168118
+1    0002                 16.905842       0.063173            167556
+5    0131                 16.960503       0.063171            167016
+6    0140                 16.961925       0.062890            167002
+8    018f                 16.969199       0.062809            166931
+12   02c0                 16.991313       0.062883            166713
+16   0370                 16.994565       0.062952            166681
+13   0316                 16.999750       0.063465            166631
+7    0153                 17.005609       0.063420            166573
+18   043f                 17.053705       0.063548            166103
+10   0260                 17.097226       0.063757            165681
+11   02a0                 17.104143       0.063437            165614
+15   0350                 17.107078       0.063543            165585
+19   0440                 17.161777       0.063766            165057
+14   0329                 17.175390       0.063982            164927
+22   0545                 17.480859       0.066027            162045
+17   0430                 33.323589       0.095920             85005
+9    01f1                 33.440824       0.095620             84707
+20   04b1                 33.634596       0.097908             84219
+21   04f0                 34.499562       0.108318             82108
+25   05f0                 90.826993       0.259584             31188
+2    00a0                169.898521       0.329660             16673
+3    00a1                170.512169       0.334824             16613
+26   0690                174.237316       0.357889             16258
+23   05a0               1731.801971       1.576576              1636
+24   05a2               1759.785375       1.629830              1610
+
+Benign datset:
+Distinct CAN IDs:
+['0002' '00a0' '00a1' '0130' '0131' '0140' '0153' '018f' '01f1' '0260'
+ '02a0' '02b0' '02c0' '0316' '0329' '0350' '0370' '0430' '043f' '0440'
+ '04b1' '04f0' '0545' '05a0' '05a2' '05f0' '0690']
+
+sorted on basis of average-interval:
+    can_id  average_interval (in ms)  std_deviation  no_of_occurences
+12   02c0                  9.991123       0.000250             13974
+13   0316                  9.991474       0.000759             13973
+14   0329                  9.991523       0.000624             13973
+9    0260                  9.991539       0.000519             13973
+10   02a0                  9.991540       0.000558             13973
+22   0545                  9.991540       0.000610             13973
+7    018f                  9.991592       0.000478             13973
+15   0350                  9.996810       0.000327             13966
+0    0002                  9.999302       0.001172             13962
+5    0140                  9.999319       0.001164             13962
+3    0130                  9.999320       0.001168             13962
+4    0131                  9.999320       0.001164             13962
+6    0153                  9.999337       0.000723             13962
+18   043f                 10.000506       0.000426             13960
+16   0370                 10.000538       0.000373             13960
+19   0440                 10.000590       0.000496             13960
+11   02b0                 10.007508       0.000278             13951
+17   0430                 19.998783       0.000173              6981
+8    01f1                 19.998815       0.000214              6981
+20   04b1                 19.998817       0.000221              6981
+21   04f0                 19.999806       0.000465              6981
+25   05f0                 49.999662       0.000629              2792
+2    00a1                 99.916124       0.000778              1397
+1    00a0                 99.916140       0.000777              1397
+26   0690                 99.998958       0.000424              1396
+24   05a2                999.112971       0.000728               140
+23   05a0                999.113814       0.000574               140
+
+
+ResNet-18 is a convolutional neural network (CNN) architecture that is 18 layers deep. It is a popular model for image classification and has been used to achieve state-of-the-art results on a variety of benchmarks.
+ResNet-18 model from “Deep Residual Learning for Image Recognition”.Deep convolutional neural networks
+Model trained:
+{'train': 60565, 'val': 570, 'test': 1997}
+['attack', 'benign']
+Fraction: 0.70 
+Epoch 0/9
+----------
+train Loss: 0.0913 Acc: 0.9700
+val Loss: 0.8026 Acc: 0.7982
+Epoch 1/9
+----------
+train Loss: 0.0873 Acc: 0.9715
+val Loss: 0.4609 Acc: 0.7912
+Epoch 2/9
+----------
+train Loss: 0.0873 Acc: 0.9713
+val Loss: 0.3684 Acc: 0.8386
+Epoch 3/9
+----------
+train Loss: 0.0902 Acc: 0.9703
+val Loss: 0.6291 Acc: 0.8193
+Epoch 4/9
+----------
+train Loss: 0.0873 Acc: 0.9712
+val Loss: 0.4932 Acc: 0.8088
+Epoch 5/9
+----------
+train Loss: 0.0874 Acc: 0.9713
+val Loss: 0.6208 Acc: 0.7965
+Epoch 6/9
+----------
+train Loss: 0.0885 Acc: 0.9709
+val Loss: 0.4183 Acc: 0.8298
+Epoch 7/9
+----------
+train Loss: 0.0895 Acc: 0.9712
+val Loss: 0.8355 Acc: 0.7912
+Epoch 8/9
+----------
+train Loss: 0.0864 Acc: 0.9713
+val Loss: 0.6320 Acc: 0.8123
+Epoch 9/9
+----------
+train Loss: 0.0873 Acc: 0.9705
+val Loss: 0.4722 Acc: 0.8298
+Training complete!
+
+Test Accuracy: 0.9324
+
+fraction=20%
+Test Accuracy: 0.6421
+{'test': 22150}
+['attack', 'benign']
+
+fraction=25%
+Test Accuracy: 0.6446
+
+fraction = 25%
+Test Accuracy = 0.6469
+
+#frames taken to form images: 250000
+Average total number of frames in an image: 17.818209157206226
+Average number of attack frames in an image: 4.08307646041651
+
+When fraction = 50%
+Test Accuracy =  0.7272
+
+When fraction = 50% and image_fraction_anchor = 3/4
+{'train': 5630, 'val': 425, 'test': 316}
+total data = {'test': 6371}
+Average total number of frames in an image: 30.472767226495055
+Average number of attack frames in an image: 7.3632082875529745
+Model is trained on this :
+Test Accuracy: 0.9051
+
+When fraction = 20% and image fraction anchor =3/4
+Test Accuracy: 0.9175
+Average total number of frames in an image: 30.472767226495055
+Average number of attack frames in an image: 7.3632082875529745
+{'train': 4954, 'val': 617, 'test': 800}
+['attack', 'benign']
+
+When there is atleast 1 attack frame and image fraction anchor = 3/4
+{'train': 11717, 'val': 738, 'test': 1441}
+['attack', 'benign']
+Average total number of frames in an image: 27.854274611398964
+Average number of attack frames in an image: 5.887449625791595
+Test Accuracy: 0.9771
