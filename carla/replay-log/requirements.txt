@@ -1,0 +1,4 @@
+can
+numpy
+pygame
+cantools
