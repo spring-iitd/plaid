@@ -2,3 +2,10 @@
 Smart Attack Algorithm/data/
 Smart Attack Algorithm/.ipynb_checkpoints/
 traffic-to-image/images/
+test/
+new_stuff/
+*.zip
+*.pth
+Anchor_Images/
+Generated_Images/
+*.json
