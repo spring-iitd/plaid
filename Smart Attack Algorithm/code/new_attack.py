@@ -2,12 +2,14 @@ import numpy as np
 import pandas as pd
 import os
 from collections import defaultdict
-from tqdm import tqdm
+# from tqdm import tqdm
 import matplotlib.pyplot as plt
 from datetime import datetime
+from tqdm import tqdm
+from utils import *
 
+data_folder = 'scratch/car_hacking/'
 
-data_folder = '../data/Car Hacking Dataset/'
 
 def hex_to_bin(hex_num):
     
@@ -43,6 +45,7 @@ def read_data(data_path):
     return data
 
 normal_data = read_data(os.path.join(data_folder, 'benign_data.csv'))
+normal_data = normal_data[:100_000]
 
 def calculate_average_time_frequency(dataframe):
     
@@ -101,6 +104,9 @@ def calculate_inverse_periodicity(periodicity_dict):
 
 def injection_possible(inter_arrival_time):
 
+    if inter_arrival_time < 0:
+        return (False, 0)
+
     #This is the time that it would take a fully stuffed frame to be transmitted 
     #to the bus at 512kbps 
     time_to_transit = 0.000255
@@ -144,15 +150,16 @@ def calculate_atr(data, ts, periodicity_dict):
 ## In actual it will shift packets or we change approach?
 
 def attack(data, thresh):
-
+    
     data = data.drop(columns=['IAT'],axis = 1)
-    standby_packets = 100_000
-
+    standby_packets = 10_000
     out = []
 
-    for ind in range(len(data)):
+    injection_count = 0
+
+    for ind in tqdm(range(len(data))):
         
-        print(f"{ind} out of {len(data)}: {ind/len(data)*100}%")
+        # print(f"{ind} out of {len(data)}: {ind/len(data)*100}%")
 
         if ind <= standby_packets:
             out.append(data.iloc[ind].values)
@@ -171,21 +178,72 @@ def attack(data, thresh):
             
                 attack_id = max(atr_dict, key=atr_dict.get)
 
-                min_thresh = thresh * periodicity_dict[attack_id]
+                rand_data = data[:ind][data[:ind]['ID'] == attack_id].sample(1)
+                dlc = rand_data['DLC'].item()
+                payload =  rand_data['Payload'].item()
+                
+                frame_length = frame_len(dec_to_hex(attack_id), dlc, dec_to_hex(payload))
+                tt = transmission_time(frame_length, 512)
+
+
+                try:
+                    min_thresh = thresh * periodicity_dict[attack_id]
+                except TypeError:
+                    print(thresh, type(thresh))
+                    print(periodicity_dict[attack_id], type(periodicity_dict[attack_id]))
 
                 last_encountered_ts = data[:ind][data[:ind]['ID'] == attack_id].iloc[-1]['Timestamp']
 
                 lb1 = last_encountered_ts + min_thresh
-                lb2 = prev_ts + 0.000255
+                # lb2 = prev_ts + 0.000255
+                lb2 = curr_ts - tt
 
-                lower_bound = max(lb1, lb2)
+                # if injection_count < 30:
+                #     if lb1 > lb2:
+                #         print("lb1")
+                #     else:
+                #         print('lb2')
 
-                if injection_possible(curr_ts - lower_bound):
+                # lower_bound = max(lb1, lb2)
+
+                if lb1>lb2:
+                        attack_ts = lb1 
+                else:
+                    attack_ts = lb2
+
+                print(tt)
+        
+                # if injection_possible(curr_ts - lower_bound)      If using this method we should find ideal perturbation to lower_bound st it is less than curr_ts - 250uS
+
+                # diff = curr_ts - attack_ts
+
+                # if diff < tt:
+                #     attack_ts = curr_ts - tt
+
+                if (attack_ts > prev_ts) and (attack_ts < curr_ts):
+                
+                    # if injection_count < 30:
+                    #     injection_count += 1
+                    #     print(f"Injection count: {injection_count}")
+                    #     new_dict = {dec_to_hex(key): round(value*1000000, 3) for key, value in atr_dict.items()}
+                    #     sorted_new_dict = sorted(new_dict.items(), key =lambda x : x[1], reverse=True)
+                    #     new_dict = dict(sorted_new_dict)
+                    #     print(new_dict)
+                    #     print("\n\n\n")
+                                                
+                    # else:
+                    #     break
 
                     rand_data = data[:ind][data[:ind]['ID'] == attack_id].sample(1)
 
-                    attack_frame = [lower_bound + 0.000255, attack_id, rand_data['DLC'], rand_data['Payload'], 1]
+                    # if lb1>lb2:
+                    #     attack_ts = lower_bound + 0.000255
+                    # else:
+                    #     attack_ts = lower_bound
 
+                    # attack_frame = [lower_bound + 0.000255, attack_id, rand_data['DLC'].item(), rand_data['Payload'].item(), 1]
+                    attack_frame = [attack_ts, attack_id, dlc, payload, 1]
+                
                     out.append(attack_frame)
                 
             out.append(data.iloc[ind].values)
@@ -195,13 +253,13 @@ def attack(data, thresh):
     return out
 
 
-thresh_vals = [x * 0.01 for x in range(5,95,5)]
+thresh_vals = [0.9]
 
-output_dir = "../data/New Attack/"
+output_dir = "scratch/new_attack_results"
 
 
 for val in thresh_vals:
-    data_out = attack(normal_data)
+    data_out = attack(normal_data, val)
 
     print(f"Threshold value: {val}")
     
@@ -209,60 +267,14 @@ for val in thresh_vals:
 
     print(f"Packets injected: {out_df['label'].value_counts()[1]}")
     
-    out_path = os.path.join(output_dir, f"thresh_val_{val}")
+    out_path = os.path.join(output_dir, f"lb_attack_new.csv")
     
-    out_df.to_csv(out_path)
+    out_df.to_csv(out_path, index = False)
+
+    print('\t\t\t')
 
 
 
-
-
-# standby_packets = 20_000
-
-# threshold = 0.5
-
-
-# out = []
-
-# for ind in range(len(normal_data)):
-    
-#     print(f"{ind} out of {len(normal_data)}: {ind/len(normal_data)*100}%")
-
-#     if ind <= standby_packets:
-#         out.append(normal_data.iloc[ind].values)
-    
-#     else:
-#         curr_ts = normal_data['Timestamp'][ind]
-#         prev_ts = normal_data['Timestamp'][ind - 1]
-
-#         curr_iat = curr_ts - prev_ts
-
-#         if injection_possible(curr_iat)[0]:
-           
-#             periodicity_dict = calculate_periodicity(normal_data[:ind])
-
-#             atr_dict =  calculate_atr(normal_data[:ind], curr_ts, periodicity_dict)
-          
-#             attack_id = max(atr_dict, key=atr_dict.get)
-
-#             min_thresh = threshold * periodicity_dict[attack_id]
-
-#             last_encountered_ts = normal_data[:ind][normal_data[:ind]['ID'] == attack_id].iloc[-1]['Timestamp']
-
-#             lb1 = last_encountered_ts + min_thresh
-#             lb2 = prev_ts + 0.000255
-
-#             lower_bound = max(lb1, lb2)
-
-#             if injection_possible(curr_ts - lower_bound):
-
-#                 rand_data = normal_data[:ind][normal_data[:ind]['ID'] == attack_id].sample(1)
-
-#                 attack_frame = [lower_bound + 0.000255, attack_id, rand_data['DLC'], rand_data['Payload'], 1]
-
-#                 out.append(attack_frame)
-            
-#         out.append(normal_data.iloc[ind].values)
 
 
     
