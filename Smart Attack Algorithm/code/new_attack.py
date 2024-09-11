@@ -108,8 +108,8 @@ def injection_possible(inter_arrival_time):
         return (False, 0)
 
     #This is the time that it would take a fully stuffed frame to be transmitted 
-    #to the bus at 512kbps 
-    time_to_transit = 0.000255
+    #to the bus at 500kbps 
+    time_to_transit = 0.000222
 
     num_injections = (inter_arrival_time - time_to_transit) // time_to_transit
 
@@ -211,7 +211,7 @@ def attack(data, thresh):
                 else:
                     attack_ts = lb2
 
-                print(tt)
+                # print(tt)
         
                 # if injection_possible(curr_ts - lower_bound)      If using this method we should find ideal perturbation to lower_bound st it is less than curr_ts - 250uS
 
