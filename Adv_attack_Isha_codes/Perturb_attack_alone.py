@@ -124,10 +124,11 @@ def load_model(image_datasets, pre_trained_model_path,test_model_path, test_mode
         test_model.classifier[2] = nn.Linear(test_model.classifier[2].in_features, num_classes)
     
     #because no gpu
-    # model = torch.load(pre_trained_model_path, map_location=torch.device('cpu'))
-    
-    model.load_state_dict(torch.load(pre_trained_model_path))
-    test_model.load_state_dict(torch.load(test_model_path))
+    model.load_state_dict(torch.load(pre_trained_model_path, map_location=torch.device('cpu')))
+    test_model.load_state_dict(torch.load(test_model_path, map_location=torch.device('cpu')))
+
+    # model.load_state_dict(torch.load(pre_trained_model_path))
+    # test_model.load_state_dict(torch.load(test_model_path))
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -190,11 +191,14 @@ def save_image(perturbed_data,n_image,original):
     plt.savefig('perturbed_images/{}_perturbed_{}.png'.format(original,n_image), dpi=300)
     # plt.show()
 
-def print_image(img):
+def print_image(img,n,pack):
     img = img.detach()
     img = img.squeeze().permute(1, 2, 0).cpu().numpy()  # Convert to numpy format
     plt.imshow(img, cmap='gray', interpolation='none')
-    plt.title(f"Mask (Pack)")
+    if n == 1:
+        plt.title(f"Mask, Injection {pack})")
+    elif n == 2:
+        plt.title(f"Perturbed image, Injection{pack}")
     plt.show()
 
 def calculate_crc(data):
@@ -338,28 +342,44 @@ def apply_constraint(image, mask,perturbed_image ):
         row = mask[b, 0].nonzero(as_tuple=True)[0]  # Identified row index
         if len(row) > 0:  # Only apply if a row is identified
             row = row[0].item()
-            # Apply fixed pattern to first 26 pixels
-            # fixed_pattern = "00000100010011000001001000"
-            fixed_pattern = "000100110000010011000"
+            print("before perturbation",perturbed_image[b, :, row, :])
+            # fixed_pattern = "0 000010 00100110000 01 0 0 1000"
+            #fixed_pattern = (sof, id, RTR, IDE bit, r0, DLC)
+            fixed_pattern = "00010011000001001000"
             for i, bit in enumerate(fixed_pattern):
                 value = 1.0 if bit == '1' else 0.0
                 perturbed_image[b, :, row, i] = value
                 # colored black or white
+                # Get the edited part and its length
+            
+            # edited_part = perturbed_image[b, :, row, :len(fixed_pattern)]
+            # length_of_edited_part = edited_part.shape[1]  # Length in terms of pixels
 
-            # Perturbation bits from 27th to 90th pixels
-            perturbation_bits = ''.join(['1' if perturbed_image[b, 0, row, len(fixed_pattern) + i] > 0.5 else '0' for i in range(64)])
+            # Print the edited part and its length
+            # print("Edited part:", edited_part)
+            # print("Length of edited part:", length_of_edited_part)
+
+          
+            # perturbation_bits = ''.join(['1' if perturbed_image[b, :, row, len(fixed_pattern) + i] > 0.5 else '0' for i in range(64)])
+            perturbation_bits = ''
             # print("Perturbation bits:", perturbation_bits,len(perturbation_bits))
+            
             for col in range(len(fixed_pattern), len(fixed_pattern)+64):
                 pixel_value = perturbed_image[b, :, row, col]
                 dot_product_with_1 = torch.dot(pixel_value, torch.tensor([1.0, 1.0, 1.0], device=image.device))
                 dot_product_with_0 = torch.dot(pixel_value, torch.tensor([0.0, 0.0, 0.0], device=image.device))
                 if dot_product_with_1 >= dot_product_with_0:
                     perturbed_image[b, :, row, col] = 1.0  # Set to (256, 256, 256) in range [0, 1]
+                    perturbation_bits +='1'
                 else:
                     perturbed_image[b, :, row, col] = 0.0  # Set to (0, 0, 0)
-
-            # Calculate CRC
-            crc_input = '0' + '00100110000' + '0' + '0' + '0' + '1' + '1000' + perturbation_bits
+                    perturbation_bits +='0'
+             
+            # print("log2 data", perturbed_image[b, :, row, len(fixed_pattern):84])
+            # print("log2 data length", perturbed_image[b, :, row, len(fixed_pattern):84].shape[1])
+            # print("perturbation_bits",perturbation_bits)
+            # Calculate CRC (sof, id,rtr, idebit, ro, dlc,data ) crc is calculated on raw data not he bit stuffed data
+            crc_input = '0' + '00100110000' + '0' + '0' + '0' + '1000' + perturbation_bits
             crc_output = calculate_crc(crc_input)
             crc_output = bin(crc_output)[2:].zfill(15)
             # crc_output = crc_remainder(crc_input, '100000111', '0')
@@ -368,27 +388,43 @@ def apply_constraint(image, mask,perturbed_image ):
             # Apply bit-stuffed CRC to the next 15 pixels
             for i, bit in enumerate(bit_stuffed_crc):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + 64 + i] = value
+                perturbed_image[b, :, row, len(fixed_pattern) + len(perturbation_bits) + i] = value
 
+            # print("log3 crc", perturbed_image[b, :, row, 84:84+15])
+            # print("log3 crc len", perturbed_image[b, :, row, 84:84+len(bit_stuffed_crc)].shape[1])
+            
+            #ending part = (CRC del, ack, ack del, EoF, IFS)
             ending_part = '1011111111111'
             for i, bit in enumerate(ending_part):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + 64 +len(ending_part)+ i] = value
+                perturbed_image[b, :, row, len(fixed_pattern) + len(perturbation_bits)+ len(bit_stuffed_crc)+ i] = value
+                # perturbed_image[b, 1, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
+                # perturbed_image[b, 2, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
+                # print(perturbed_image[b, :, row, len(fixed_pattern) + 64 +len(ending_part)+ i])
             
+            # print("log4 ending part ", perturbed_image[b, :, row, 84+15:84+15+len(ending_part)])
+            # print("log4 len ", perturbed_image[b, :, row, 84+len(bit_stuffed_crc):84+len(bit_stuffed_crc)+len(ending_part)].shape[1])
             # Mark the rest of the pixels in the row as green
-            for i in range(len(fixed_pattern) + 64 + len(ending_part)+len(bit_stuffed_crc), 128):
+            for i in range(len(fixed_pattern) + len(perturbation_bits) +len(bit_stuffed_crc)+len(ending_part), 128):
                 perturbed_image[b, 1, row, i] = 1.0  # Set green channel to maximum
                 perturbed_image[b, 0, row, i] = 0.0
                 perturbed_image[b, 2, row, i] = 0.0
+            
+            # print("log5 green portion", perturbed_image[b, :, row, 84+len(bit_stuffed_crc)+len(ending_part):128])
+            # print("log5 len green", perturbed_image[b, :, row,84+len(bit_stuffed_crc)+ len(ending_part):128].shape[1])
 
-            # print("perturbed bits:", perturbed_image[b, :, row, :].flatten())
-    
+            # print("packet length",len(fixed_pattern) + 64 + len(ending_part)+len(bit_stuffed_crc))
+            # print(len(fixed_pattern))
+            # print("64")
+            # print(len(ending_part))
+            # print(len(bit_stuffed_crc))
+            
+            # print("perturbed bits:", perturbed_image[b, :, row, :])
     # Adding clipping to maintain [0,1] range
     perturbed_image = torch.clamp(perturbed_image, 0, 1)
-    # print_image(perturbed_image)
     return perturbed_image
 
-def fgsm_attack_valid(image, data_grad,ep,perturbation_type):
+def fgsm_attack_valid(image, data_grad,ep,perturbation_type,pack):
     # Collect the element-wise sign of the data gradient
     sign_data_grad = data_grad.sign()
     if perturbation_type == "Random":
@@ -397,7 +433,7 @@ def fgsm_attack_valid(image, data_grad,ep,perturbation_type):
     else:
         mask = generate_max_grad_mask(image, data_grad)
 
-    # print_image(mask)
+    print_image(mask,1,pack)
     
     sign_data_grad = sign_data_grad * mask
 
@@ -410,10 +446,10 @@ def fgsm_attack_valid(image, data_grad,ep,perturbation_type):
 
 def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,perturbation_type):
     
-    # print("pack",pack)
-    # Apply FGSM attack to get perturbed data
-    perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type)
-    
+ 
+    perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type,pack)
+    print_image(perturbed_data,2,pack)
+  
     with torch.no_grad():
         output = test_model(perturbed_data)
 
@@ -471,7 +507,7 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
             data_denorm = denorm(data)
             continue_perturbation = True
             
-            while continue_perturbation and perturbation_count < max_perturbations:
+            while continue_perturbation and perturbation_count <= max_perturbations:
                 continue_perturbation, pack, final_pred, data_denorm = apply_fgsm_and_check(
                     pack, test_model, target, data_grad, data_denorm, ep, perturbation_type
                 )
@@ -489,7 +525,6 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
                     data_grad = perturbed_data.grad.data
                 
                 
-                # print_image(data_denorm)
                 perturbation_count += 1
         else:
             print("Image no:", n_image, "(Benign image - skipping perturbation)")
@@ -555,12 +590,12 @@ def check_model(test_loader, model_path):
 def main():
     #Define paths for dataset and model
     # dataset_dir = './selected_images'
-    test_dataset_dir = './selected_images'
+    test_dataset_dir = './test_selected_images'
     # train_dataset_dir = './selected_images'
     pre_trained_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
     test_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
     # label_file = "selected_images.txt"
-    test_label_file = "selected_images.txt"
+    test_label_file = "test_selected_images.txt"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -575,9 +610,10 @@ def main():
 
      # Define the parameters
     epsilon = 1
-    perturbation_type = "Random"   
+    perturbation_type = "Max_grad"   
    # List of max_perturbations to iterate over
-    max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
+    max_perturbations_list = [1, 5]
+    # max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
 
     # Loop through the list of max_perturbations
     for max_perturbations in max_perturbations_list:
@@ -594,11 +630,11 @@ def main():
         acc = np.sum(preds == labels) / len(labels)
         print("Model accuracy:", acc)
         
-        tnr, mdr, oa_asr, asr = evaluation_metrics(preds, labels,max_perturbations)
-        print("TNR:", tnr)
-        print("MDR:", mdr)
-        print("OA_ASR:", oa_asr)
-        print("ASR:", asr)
+        # tnr, mdr, oa_asr, asr = evaluation_metrics(preds, labels,max_perturbations)
+        # print("TNR:", tnr)
+        # print("MDR:", mdr)
+        # print("OA_ASR:", oa_asr)
+        # print("ASR:", asr)
 
 
 
