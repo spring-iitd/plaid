@@ -9,3 +9,9 @@ new_stuff/
 Anchor_Images/
 Generated_Images/
 *.json
+
+Smart Attack Algorithm/Attack Comparison/Car-Hacking
+Smart Attack Algorithm/Attack Comparison/*.csv
+Smart Attack Algorithm/Attack Comparison/*.pkl
+Smart Attack Algorithm/Attack Comparison/*.h5
+Smart Attack Algorithm/Attack Comparison/*.sav
