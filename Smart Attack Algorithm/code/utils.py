@@ -169,5 +169,26 @@ def transmission_time(frame_length, bus_rate=500):
 
     return frame_length/(bus_rate * 1000)
 
+dec_to_hex = lambda x : hex(int(x))[2:]
 
-
+def calculate_bus_load(df, bus_bandwidth_kbps):
+    # Convert the bus bandwidth to bits per second
+    bus_bandwidth_bps = bus_bandwidth_kbps * 1000
+    
+    # Calculate the duration of the session
+    start_time = df['Timestamp'].min()
+    end_time = df['Timestamp'].max()
+    total_time_sec = end_time - start_time  # Assuming timestamps are in seconds
+    
+    # Calculate total data transmitted in bits using the frame_len function
+    total_bits_transmitted = 0
+    
+    for index, row in df.iterrows():
+        # Convert the 'ID' and 'Payload' to hex strings and pass them along with DLC
+        frame_bits = frame_len(dec_to_hex(row['ID']), row['DLC'], dec_to_hex(row['Payload']))
+        total_bits_transmitted += frame_bits
+    
+    # Calculate the bus load as a percentage
+    bus_load_percentage = (total_bits_transmitted / (total_time_sec * bus_bandwidth_bps)) * 100
+    
+    return bus_load_percentage
