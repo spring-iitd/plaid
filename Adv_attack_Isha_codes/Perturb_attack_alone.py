@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import torchvision.utils as vutils
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
 
 # Define transformations and dataset paths
 data_transforms = {
@@ -68,7 +70,7 @@ def denorm(batch, mean=[0.1307], std=[0.3081]):
 
     return batch * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
 
-def evaluation_metrics(all_preds, all_labels,max_perturbations):
+def evaluation_metrics(all_preds, all_labels,max_perturbations,perturbation_type):
 
     # Generate confusion matrix
     cm = confusion_matrix(all_labels, all_preds)
@@ -77,7 +79,7 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations):
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0, 1])
     disp.plot(cmap=plt.cm.Blues)
     plt.title('Confusion Matrix')
-    plt.savefig('./CF/perturb_attack_only/cf_random{}.png'.format(max_perturbations), dpi=300)
+    plt.savefig('./CF/perturb_attack_only/cf_{}_{}.png'.format(perturbation_type,max_perturbations), dpi=300)
     # plt.show()
     
 
@@ -89,9 +91,11 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations):
 
     # Calculate metrics
     tnr = true_negatives / (true_negatives + false_positives)  # True Negative Rate
-    mdr = true_positives / (true_positives + false_positives)  # Missed Detection Rate
-    asr = (true_positives + true_negatives) / np.sum(cm)  # Overall Accuracy / Attack Success Rate
-    
+    mdr = true_positives / (true_positives + false_negatives)  # malicious Detection Rate
+    IDS_accu = accuracy_score(all_labels, all_preds) 
+    IDS_prec = precision_score(all_labels, all_preds)
+    IDS_recall = recall_score (all_labels,all_preds)
+    IDS_F1 = f1_score(all_labels,all_preds)
     # Number of attack packets misclassified as benign (all_labels == 0 and all_preds == 1)
     misclassified_attack_packets = ((all_labels == 1) & (all_preds == 0)).sum().item()
 
@@ -100,7 +104,7 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations):
 
     oa_asr = misclassified_attack_packets / total_attack_packets
 
-    return tnr, mdr, oa_asr,asr
+    return tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1
 
 def load_model(image_datasets, pre_trained_model_path,test_model_path, test_model_type):
     # Load the pre-trained ResNet-18 model
@@ -123,12 +127,13 @@ def load_model(image_datasets, pre_trained_model_path,test_model_path, test_mode
         test_model = models.convnext_base(pretrained=True)
         test_model.classifier[2] = nn.Linear(test_model.classifier[2].in_features, num_classes)
     
-    #because no gpu
-    model.load_state_dict(torch.load(pre_trained_model_path, map_location=torch.device('cpu')))
-    test_model.load_state_dict(torch.load(test_model_path, map_location=torch.device('cpu')))
+    #If the systen don't have GPU
+    # model.load_state_dict(torch.load(pre_trained_model_path, map_location=torch.device('cpu')))
+    # test_model.load_state_dict(torch.load(test_model_path, map_location=torch.device('cpu')))
 
-    # model.load_state_dict(torch.load(pre_trained_model_path))
-    # test_model.load_state_dict(torch.load(test_model_path))
+    #If the system has GPU
+    model.load_state_dict(torch.load(pre_trained_model_path))
+    test_model.load_state_dict(torch.load(test_model_path))
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -179,16 +184,16 @@ def load_dataset(data_dir,label_file,device,is_train=True):
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     print(f'Loaded {len(images)} images.')
-    print(f'First image shape: {data_loader.dataset[0][0].shape}, Label: {data_loader.dataset[0][1]}')
+    # print(f'First image shape: {data_loader.dataset[0][0].shape}, Label: {data_loader.dataset[0][1]}')
 
     return dataset, data_loader
 
-def save_image(perturbed_data,n_image,original):
+def save_image(perturbed_data,n_image):
     perturbed_data = perturbed_data.detach()
     perturbed_image_np = perturbed_data.squeeze().permute(1, 2, 0).cpu().numpy()  # Convert to numpy format
     plt.imshow(perturbed_image_np, cmap='gray', interpolation='none')
-    plt.title(f"Perturbed Image (Pack {n_image})")
-    plt.savefig('perturbed_images/{}_perturbed_{}.png'.format(original,n_image), dpi=300)
+    plt.title(f"Perturbed Image {n_image}")
+    plt.savefig('Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(n_image), dpi=300)
     # plt.show()
 
 def print_image(img,n,pack):
@@ -278,8 +283,14 @@ def create_green_mask(red_channel, green_channel, blue_channel):
 
 def find_rows_with_green(green_mask):
     """Finds rows that contain green pixels by summing along the width dimension."""
+    No_green_row = False
     row_sums = green_mask.sum(dim=-1)
-    return (row_sums > 0).nonzero(as_tuple=True)[1]
+    green_rows = (row_sums > 0).nonzero(as_tuple=True)[1]
+
+    if green_rows.numel() == 0:  # If no green rows found
+        No_green_row = True
+        
+    return green_rows, No_green_row
 
 def select_random_rows(rows_with_green, numberofrows):
     """Randomly selects a specified number of rows from the rows that contain green pixels."""
@@ -304,7 +315,9 @@ def create_mask(mask, selected_rows):
 def generate_multiple_mask_random(image, pack):
     red_channel, green_channel, blue_channel = extract_color_channels(image)
     green_mask = create_green_mask(red_channel, green_channel, blue_channel)
-    rows_with_green = find_rows_with_green(green_mask)
+    rows_with_green, No_green_row = find_rows_with_green(green_mask)
+    if No_green_row:
+        return None
     selected_rows = select_random_rows(rows_with_green, pack)
     mask = initialize_mask(image)
     mask = create_mask(mask, selected_rows)
@@ -342,7 +355,7 @@ def apply_constraint(image, mask,perturbed_image ):
         row = mask[b, 0].nonzero(as_tuple=True)[0]  # Identified row index
         if len(row) > 0:  # Only apply if a row is identified
             row = row[0].item()
-            print("before perturbation",perturbed_image[b, :, row, :])
+            # print("before perturbation",perturbed_image[b, :, row, :])
             # fixed_pattern = "0 000010 00100110000 01 0 0 1000"
             #fixed_pattern = (sof, id, RTR, IDE bit, r0, DLC)
             fixed_pattern = "00010011000001001000"
@@ -433,7 +446,9 @@ def fgsm_attack_valid(image, data_grad,ep,perturbation_type,pack):
     else:
         mask = generate_max_grad_mask(image, data_grad)
 
-    print_image(mask,1,pack)
+    if mask == None:
+        return None
+    # print_image(mask,1,pack)
     
     sign_data_grad = sign_data_grad * mask
 
@@ -448,7 +463,7 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
     
  
     perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type,pack)
-    print_image(perturbed_data,2,pack)
+    # print_image(perturbed_data,2,pack)
   
     with torch.no_grad():
         output = test_model(perturbed_data)
@@ -459,6 +474,9 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
     final_pred = output.max(1, keepdim=True)[1] # index of the maximum log-probability
     # print("predicted, label ",final_pred.item(), target.item())
 
+    if perturbed_data == None:
+        print("No more space to inject")
+        return False, pack, final_pred, perturbed_data
     
     #for 0-benign, 1-attack
     if final_pred.item() == target.item():
@@ -526,10 +544,12 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
                 
                 
                 perturbation_count += 1
+            save_image(perturbed_data,n_image)
         else:
             print("Image no:", n_image, "(Benign image - skipping perturbation)")
-
-        print("final no of perturbations:", pack )    
+            save_image(data,n_image)
+        
+        print("final no of perturbations:", perturbation_count-1)    
         n_image += 1
         all_preds.extend(final_pred.cpu().numpy())
         all_labels.extend(target.cpu().numpy())
@@ -588,37 +608,48 @@ def check_model(test_loader, model_path):
 
 
 def main():
+
+    #steps to check before reunning this code.
+    #1. save or print perturbed image .
+    #2. save or print confusion matrix.
+    #3. Decide epsilon, max_perturbation and perturbation_type
+    #4. Select the target IDS (test_model_type) and surrogate IDS
+    #5. select the data folders, label file and surrogate IDS
+    #6. select GPU or CPU in load_model()
+     
+
     #Define paths for dataset and model
     # dataset_dir = './selected_images'
-    test_dataset_dir = './test_selected_images'
+    test_dataset_dir = './selected_images'
     # train_dataset_dir = './selected_images'
     pre_trained_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
     test_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
     # label_file = "selected_images.txt"
-    test_label_file = "test_selected_images.txt"
+    test_label_file = "selected_images.txt"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     image_datasets, test_loader = load_dataset(test_dataset_dir,test_label_file,device,is_train=False)
     print("loaded test dataset")
     # image_datasets, train_loader = load_dataset(train_dataset_dir,train_label_file,device,is_train=True)
-    print("loaded trauning set")
+    print("loaded training set")
     # image_datasets,test_loader = load_dataset(dataset_dir)
     
     #laod the model
     model, test_model = load_model(image_datasets, pre_trained_model_path,test_model_path, test_model_type = 'res')
 
-     # Define the parameters
+    
+    # Define the parameters
     epsilon = 1
     perturbation_type = "Max_grad"   
    # List of max_perturbations to iterate over
-    max_perturbations_list = [1, 5]
+    max_perturbations_list = [20]
     # max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
 
     # Loop through the list of max_perturbations
     for max_perturbations in max_perturbations_list:
         print("--------------------------------")
-        print(f"Testing with max_perturbations: {max_perturbations}")
+        print(f"Testing with max_perturbations  {max_perturbations} and perturbation_type {perturbation_type}")
 
         # Call the attack procedure 
         preds, labels = Attack_procedure(model, test_model, device, test_loader, perturbation_type, epsilon, max_perturbations)
@@ -626,15 +657,15 @@ def main():
         print("Labels:", labels)
         print("Predictions:", preds)
         
-        # Evaluation
-        acc = np.sum(preds == labels) / len(labels)
-        print("Model accuracy:", acc)
         
-        # tnr, mdr, oa_asr, asr = evaluation_metrics(preds, labels,max_perturbations)
-        # print("TNR:", tnr)
-        # print("MDR:", mdr)
-        # print("OA_ASR:", oa_asr)
-        # print("ASR:", asr)
+        tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1 = evaluation_metrics(preds, labels,max_perturbations,perturbation_type)
+        print("TNR:", tnr)
+        print("MDR:", mdr)
+        print("OA_ASR:", oa_asr)
+        print("IDS accuracy:", IDS_accu)
+        print("IDS Precision:", IDS_prec)
+        print("IDS recall:", IDS_recall)
+        print("IDS F1-score:", IDS_F1)
 
 
 
