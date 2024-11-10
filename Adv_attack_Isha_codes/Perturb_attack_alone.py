@@ -505,12 +505,11 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
         # Initialize predictions for benign images (target=0)
         initial_output = model(data)
         final_pred = initial_output.max(1, keepdim=True)[1]
-        
+        perturbation_count = 1
         # Only perform perturbation for attack images (target=1)
         if current_target == 1:
             print("Image no:", n_image, "(Attack image)")
             pack = 1
-            perturbation_count = 1
             
             data.requires_grad = True
             model.eval()
