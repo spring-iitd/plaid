@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import torchvision.utils as vutils
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from torchvision.utils import save_image
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
@@ -79,8 +80,8 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations,perturbation_type
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0, 1])
     disp.plot(cmap=plt.cm.Blues)
     plt.title('Confusion Matrix')
-    plt.savefig('./CF/perturb_attack_only/cf_{}_{}.png'.format(perturbation_type,max_perturbations), dpi=300)
-    # plt.show()
+    # plt.savefig('./CF/perturb_attack_only/cf_{}_{}.png'.format(perturbation_type,max_perturbations), dpi=300)
+    plt.show()
     
 
     # Now you can access the true negatives and other metrics
@@ -101,30 +102,39 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations,perturbation_type
 
     # Total number of original attack packets (all_labels == 0)
     total_attack_packets = (all_labels == 1).sum().item()
-
+    # total_attack_packets = 1361
     oa_asr = misclassified_attack_packets / total_attack_packets
 
-    return tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1
+    return tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall, IDS_F1
 
-def load_model(image_datasets, pre_trained_model_path,test_model_path, test_model_type):
+def load_model(image_datasets, pre_trained_model_path,test_model_path, test_model_type,surr_model_type='dense'):
     # Load the pre-trained ResNet-18 model
     
     # labels = image_datasets.tensors[1]
     # unique_classes = torch.unique(labels)
     # num_classes = len(unique_classes)
     num_classes = 2
-    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    
+    if surr_model_type == 'resnet':
+        # test_model = models.resnet18(pretrained=True)
+        model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+    elif surr_model_type == 'densenet':
+        model = models.densenet161(weights=models.DenseNet161_Weights.DEFAULT)
+        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+    else:
+        model = models.convnext_base(weights=models.ConvNeXt_Base_Weights.DEFAULT)
+        model.classifier[2] = nn.Linear(model.classifier[2].in_features, num_classes)
 
-    if test_model_type == 'res':
+    if test_model_type == 'resnet':
         # test_model = models.resnet18(pretrained=True)
         test_model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         test_model.fc = nn.Linear(test_model.fc.in_features, num_classes)
-    elif test_model_type == 'dense':
-        test_model = models.densenet161(pretrained=True)
+    elif test_model_type == 'densenet':
+        test_model = models.densenet161(weights=models.DenseNet161_Weights.DEFAULT)
         test_model.classifier = nn.Linear(test_model.classifier.in_features, num_classes)
     else:
-        test_model = models.convnext_base(pretrained=True)
+        test_model = models.convnext_base(weights=models.ConvNeXt_Base_Weights.DEFAULT)
         test_model.classifier[2] = nn.Linear(test_model.classifier[2].in_features, num_classes)
     
     #If the systen don't have GPU
@@ -132,8 +142,9 @@ def load_model(image_datasets, pre_trained_model_path,test_model_path, test_mode
     # test_model.load_state_dict(torch.load(test_model_path, map_location=torch.device('cpu')))
 
     #If the system has GPU
-    model.load_state_dict(torch.load(pre_trained_model_path))
-    test_model.load_state_dict(torch.load(test_model_path))
+    # model.load_state_dict(torch.load(pre_trained_model_path))
+    model.load_state_dict(torch.load(pre_trained_model_path, weights_only=True))
+    test_model.load_state_dict(torch.load(test_model_path, weights_only=True))
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -181,20 +192,27 @@ def load_dataset(data_dir,label_file,device,is_train=True):
     # Create DataLoader
     dataset = TensorDataset(images_tensor, labels_tensor)
     batch_size = 32 if is_train else 1  # Use larger batch size for training
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
     print(f'Loaded {len(images)} images.')
     # print(f'First image shape: {data_loader.dataset[0][0].shape}, Label: {data_loader.dataset[0][1]}')
 
     return dataset, data_loader
 
-def save_image(perturbed_data,n_image):
-    perturbed_data = perturbed_data.detach()
-    perturbed_image_np = perturbed_data.squeeze().permute(1, 2, 0).cpu().numpy()  # Convert to numpy format
-    plt.imshow(perturbed_image_np, cmap='gray', interpolation='none')
-    plt.title(f"Perturbed Image {n_image}")
-    plt.savefig('Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(n_image), dpi=300)
-    # plt.show()
+def saving_image(img, name):
+    # to_pil = transforms.ToPILImage()
+    # img = to_pil(img)
+    # img.save('./Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(name))
+    save_image(img, f'./test_random_resnet_feedback_1inj/perturbed_image_{name}.png')
+    # img.save(name)
+
+# def save_image(perturbed_data, n_image):
+#     perturbed_data = perturbed_data.detach()
+#     perturbed_image_np = perturbed_data.squeeze().permute(1, 2, 0).cpu().numpy()  # Convert to numpy format
+    
+#     # Convert numpy array to an image
+#     image = Image.fromarray((perturbed_image_np * 255).astype(np.uint8))  # Scale to [0, 255] if necessary
+#     image.save('./Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(n_image))
 
 def print_image(img,n,pack):
     img = img.detach()
@@ -465,8 +483,13 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
     perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type,pack)
     # print_image(perturbed_data,2,pack)
   
+    if perturbed_data is None:
+        print("No more space to inject")
+        return False, pack, final_pred, perturbed_data 
+    
     with torch.no_grad():
         output = test_model(perturbed_data)
+
 
     pred_probs = torch.softmax(output, dim=1)
     print("Probability of prediction",pred_probs)
@@ -474,26 +497,22 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
     final_pred = output.max(1, keepdim=True)[1] # index of the maximum log-probability
     # print("predicted, label ",final_pred.item(), target.item())
 
-    if perturbed_data == None:
-        print("No more space to inject")
-        return False, pack, final_pred, perturbed_data
     
     #for 0-benign, 1-attack
     if final_pred.item() == target.item():
         # print("Perturbation {} not successful. Injecting more perturbation.".format(pack))
         return True, pack+1, final_pred, perturbed_data  # Indicate that we need to reapply
-    elif final_pred.item() != target.item() and target.item() == 1:
-        # print("Perturbation {} successful but target class was attack. No more injection needed, return pack as final perturbation".format(pack))
-        return False, pack, final_pred, perturbed_data  # Indicate that we can stop
     else:
-        # print("Perturbation {} successful and target class was benign. No further injection needed, return pack-1 as final perturbation".format(pack))
-        return False, pack-1, final_pred, perturbed_data  # Indicate that we can stop
+        # print("Perturbation {} successful. No more injection needed, return pack as final perturbation".format(pack))
+        return False, pack, final_pred, perturbed_data  # Indicate that we can stop
+    
 
 def Attack_procedure(model, test_model, device, test_loader, perturbation_type, ep, max_perturbations):
     pack = 1
     all_preds = []
     all_labels = []
     n_image = 1
+    target_model = test_model
 
     for data, target in test_loader:
         # print(f"Current target shape: {target.shape}, value: {target}")
@@ -525,15 +544,11 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
             continue_perturbation = True
             
             while continue_perturbation and perturbation_count <= max_perturbations:
-                continue_perturbation, pack, final_pred, data_denorm = apply_fgsm_and_check(
-                    pack, test_model, target, data_grad, data_denorm, ep, perturbation_type
-                )
                 
                 if continue_perturbation:
-                    # perturbed_data = torch.tensor(data_denorm).to(device)
                     perturbed_data = data_denorm.clone().detach().to(device)
                     perturbed_data.requires_grad = True
-                    
+                    model.eval()
                     perturbed_output = model(perturbed_data)
                     new_loss = F.nll_loss(perturbed_output, target)
                     
@@ -542,23 +557,37 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
                     data_grad = perturbed_data.grad.data
                 
                 
+                continue_perturbation, pack, final_pred, data_denorm = apply_fgsm_and_check(pack, test_model, target, data_grad, perturbed_data, ep, perturbation_type)
                 perturbation_count += 1
-            save_image(perturbed_data,n_image)
+
+            saving_image(data_denorm,n_image)
         else:
+            data.requires_grad = True
+            model.eval()
+            initial_output = model(data)
+            final_pred = initial_output.max(1, keepdim=True)[1]
             print("Image no:", n_image, "(Benign image - skipping perturbation)")
-            save_image(data,n_image)
+            saving_image(data,n_image)
         
-        print("final no of perturbations:", perturbation_count-1)    
+        # target_output = target_model(data_denorm)
+        # pp = torch.softmax(target_output, dim=1)
+        # print(pp)
+        # fp = target_output.max(1, keepdim=True)[1]
+        # print("target model final preds",fp)
+        print("final no of perturbations:", perturbation_count-1) 
+
         n_image += 1
         all_preds.extend(final_pred.cpu().numpy())
         all_labels.extend(target.cpu().numpy())
 
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
-
+    # with open("perturb attack_preds.txt", "w") as file: file.write("\n".join(all_preds.squeeze()) + "\n")
     return all_preds.squeeze(), all_labels
     
 def check_model(test_loader, model_path):
+
+
     """
     Load a pre-trained model, evaluate it on the test dataset, and calculate accuracy.
 
@@ -621,28 +650,31 @@ def main():
     # dataset_dir = './selected_images'
     test_dataset_dir = './selected_images'
     # train_dataset_dir = './selected_images'
-    pre_trained_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
-    test_model_path = "./Trained_Models/custom_cnn_model_chd_resnet_.pth"
-    # label_file = "selected_images.txt"
+    surr_model_path = './Trained_Models/custom_cnn_model_chd_resnet_ 1.pth'
+    # surr_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_.pth"
+    feedback_model_path =  './Trained_Models/custom_cnn_model_chd_resnet_ 1.pth'
+    # feedback_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_.pth"
     test_label_file = "selected_images.txt"
+    feedback_model_type = 'resnet'
+    surr_model_type='resnet'
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     image_datasets, test_loader = load_dataset(test_dataset_dir,test_label_file,device,is_train=False)
     print("loaded test dataset")
     # image_datasets, train_loader = load_dataset(train_dataset_dir,train_label_file,device,is_train=True)
-    print("loaded training set")
+    # print("loaded training set")
     # image_datasets,test_loader = load_dataset(dataset_dir)
     
     #laod the model
-    model, test_model = load_model(image_datasets, pre_trained_model_path,test_model_path, test_model_type = 'res')
+    model, test_model = load_model(image_datasets, surr_model_path,feedback_model_path, feedback_model_type ,surr_model_type)
 
     
     # Define the parameters
     epsilon = 1
-    perturbation_type = "Max_grad"   
+    perturbation_type = "Random"   
    # List of max_perturbations to iterate over
-    max_perturbations_list = [20]
+    max_perturbations_list = [5]
     # max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
 
     # Loop through the list of max_perturbations
@@ -658,13 +690,13 @@ def main():
         
         
         tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1 = evaluation_metrics(preds, labels,max_perturbations,perturbation_type)
+        print(f'Accuracy: {IDS_accu:.4f}')
+        print(f'Precision: {IDS_prec:.4f}')
+        print(f'Recall: {IDS_recall:.4f}')
+        print(f'F1 Score: {IDS_F1:.4f}')
         print("TNR:", tnr)
         print("MDR:", mdr)
         print("OA_ASR:", oa_asr)
-        print("IDS accuracy:", IDS_accu)
-        print("IDS Precision:", IDS_prec)
-        print("IDS recall:", IDS_recall)
-        print("IDS F1-score:", IDS_F1)
 
 
 
