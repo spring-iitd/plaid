@@ -203,7 +203,7 @@ def saving_image(img, name):
     # to_pil = transforms.ToPILImage()
     # img = to_pil(img)
     # img.save('./Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(name))
-    save_image(img, f'./test_random_resnet_feedback_1inj/perturbed_image_{name}.png')
+    save_image(img, f'./test_random_resnet_feedback_20inj/perturbed_image_{name}.png')
     # img.save(name)
 
 # def save_image(perturbed_data, n_image):
@@ -405,11 +405,19 @@ def apply_constraint(image, mask,perturbed_image ):
                 else:
                     perturbed_image[b, :, row, col] = 0.0  # Set to (0, 0, 0)
                     perturbation_bits +='0'
-             
             # print("log2 data", perturbed_image[b, :, row, len(fixed_pattern):84])
             # print("log2 data length", perturbed_image[b, :, row, len(fixed_pattern):84].shape[1])
             # print("perturbation_bits",perturbation_bits)
             # Calculate CRC (sof, id,rtr, idebit, ro, dlc,data ) crc is calculated on raw data not he bit stuffed data
+            stuffed_perturbation_bits = bit_stuff(perturbation_bits)
+            # print("length of stuffed perturbed bits",len(stuffed_perturbation_bits),stuffed_perturbation_bits)
+            # Reassign the stuffed bits back to `perturbed_image`
+            for i,bit in enumerate(stuffed_perturbation_bits):
+                value = 1.0 if bit =='1' else 0.0
+                perturbed_image[b, :, row, len(fixed_pattern) + i] = value
+
+            # print("log2 data perturbed data", perturbed_image[b, :, row, len(fixed_pattern):len(fixed_pattern)+len(stuffed_perturbation_bits)])
+
             crc_input = '0' + '00100110000' + '0' + '0' + '0' + '1000' + perturbation_bits
             crc_output = calculate_crc(crc_input)
             crc_output = bin(crc_output)[2:].zfill(15)
@@ -419,34 +427,33 @@ def apply_constraint(image, mask,perturbed_image ):
             # Apply bit-stuffed CRC to the next 15 pixels
             for i, bit in enumerate(bit_stuffed_crc):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + len(perturbation_bits) + i] = value
+                perturbed_image[b, :, row, len(fixed_pattern) + len(stuffed_perturbation_bits) + i] = value
 
-            # print("log3 crc", perturbed_image[b, :, row, 84:84+15])
-            # print("log3 crc len", perturbed_image[b, :, row, 84:84+len(bit_stuffed_crc)].shape[1])
-            
+            # print("log3 crc", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits):len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)])
+            # print("log3 crc len", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits):len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)].shape[1])
             #ending part = (CRC del, ack, ack del, EoF, IFS)
             ending_part = '1011111111111'
             for i, bit in enumerate(ending_part):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + len(perturbation_bits)+ len(bit_stuffed_crc)+ i] = value
+                perturbed_image[b, :, row, len(fixed_pattern) + len(stuffed_perturbation_bits)+ len(bit_stuffed_crc)+ i] = value
                 # perturbed_image[b, 1, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
                 # perturbed_image[b, 2, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
                 # print(perturbed_image[b, :, row, len(fixed_pattern) + 64 +len(ending_part)+ i])
             
-            # print("log4 ending part ", perturbed_image[b, :, row, 84+15:84+15+len(ending_part)])
+            # print("log4 ending part ", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits)+15:len(fixed_pattern)+len(stuffed_perturbation_bits)+15+len(ending_part)])
             # print("log4 len ", perturbed_image[b, :, row, 84+len(bit_stuffed_crc):84+len(bit_stuffed_crc)+len(ending_part)].shape[1])
             # Mark the rest of the pixels in the row as green
-            for i in range(len(fixed_pattern) + len(perturbation_bits) +len(bit_stuffed_crc)+len(ending_part), 128):
+            for i in range(len(fixed_pattern) + len(stuffed_perturbation_bits) +len(bit_stuffed_crc)+len(ending_part), 128):
                 perturbed_image[b, 1, row, i] = 1.0  # Set green channel to maximum
                 perturbed_image[b, 0, row, i] = 0.0
                 perturbed_image[b, 2, row, i] = 0.0
             
-            # print("log5 green portion", perturbed_image[b, :, row, 84+len(bit_stuffed_crc)+len(ending_part):128])
-            # print("log5 len green", perturbed_image[b, :, row,84+len(bit_stuffed_crc)+ len(ending_part):128].shape[1])
+            # print("log5 green portion", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+len(ending_part):128])
+            # print("log5 len green", perturbed_image[b, :, row,len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+ len(ending_part):128].shape[1])
 
-            # print("packet length",len(fixed_pattern) + 64 + len(ending_part)+len(bit_stuffed_crc))
+            # print("packet length",len(fixed_pattern) + len(stuffed_perturbation_bits) + len(ending_part)+len(bit_stuffed_crc))
             # print(len(fixed_pattern))
-            # print("64")
+            # print("data",len(stuffed_perturbation_bits))
             # print(len(ending_part))
             # print(len(bit_stuffed_crc))
             
@@ -492,7 +499,7 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
 
 
     pred_probs = torch.softmax(output, dim=1)
-    print("Probability of prediction",pred_probs)
+    # print("Probability of prediction",pred_probs)
     # Get the predicted class index
     final_pred = output.max(1, keepdim=True)[1] # index of the maximum log-probability
     # print("predicted, label ",final_pred.item(), target.item())
@@ -512,7 +519,7 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
     all_preds = []
     all_labels = []
     n_image = 1
-    target_model = test_model
+    # target_model = test_model
 
     for data, target in test_loader:
         # print(f"Current target shape: {target.shape}, value: {target}")
@@ -560,14 +567,14 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
                 continue_perturbation, pack, final_pred, data_denorm = apply_fgsm_and_check(pack, test_model, target, data_grad, perturbed_data, ep, perturbation_type)
                 perturbation_count += 1
 
-            saving_image(data_denorm,n_image)
+            # saving_image(data_denorm,n_image)
         else:
             data.requires_grad = True
             model.eval()
             initial_output = model(data)
             final_pred = initial_output.max(1, keepdim=True)[1]
             print("Image no:", n_image, "(Benign image - skipping perturbation)")
-            saving_image(data,n_image)
+            # saving_image(data,n_image)
         
         # target_output = target_model(data_denorm)
         # pp = torch.softmax(target_output, dim=1)
@@ -654,6 +661,7 @@ def main():
     # surr_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_.pth"
     feedback_model_path =  './Trained_Models/custom_cnn_model_chd_resnet_ 1.pth'
     # feedback_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_.pth"
+    # test_label_file = "./image/image.txt"
     test_label_file = "selected_images.txt"
     feedback_model_type = 'resnet'
     surr_model_type='resnet'
@@ -674,8 +682,8 @@ def main():
     epsilon = 1
     perturbation_type = "Random"   
    # List of max_perturbations to iterate over
-    max_perturbations_list = [5]
-    # max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
+    # max_perturbations_list = [20]
+    max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
 
     # Loop through the list of max_perturbations
     for max_perturbations in max_perturbations_list:
@@ -685,18 +693,18 @@ def main():
         # Call the attack procedure 
         preds, labels = Attack_procedure(model, test_model, device, test_loader, perturbation_type, epsilon, max_perturbations)
         
-        print("Labels:", labels)
-        print("Predictions:", preds)
+        # print("Labels:", labels)
+        # print("Predictions:", preds)
         
         
         tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1 = evaluation_metrics(preds, labels,max_perturbations,perturbation_type)
-        print(f'Accuracy: {IDS_accu:.4f}')
-        print(f'Precision: {IDS_prec:.4f}')
-        print(f'Recall: {IDS_recall:.4f}')
-        print(f'F1 Score: {IDS_F1:.4f}')
-        print("TNR:", tnr)
+        # print(f'Accuracy: {IDS_accu:.4f}')
+        # print(f'Precision: {IDS_prec:.4f}')
+        # print(f'Recall: {IDS_recall:.4f}')
+        # print(f'F1 Score: {IDS_F1:.4f}')
+        # print("TNR:", tnr)
         print("MDR:", mdr)
-        print("OA_ASR:", oa_asr)
+        # print("OA_ASR:", oa_asr)
 
 
 
