@@ -5,7 +5,7 @@ traffic-to-image/images/
 test/
 new_stuff/
 *.zip
-*.pth
+# *.pth
 Anchor_Images/
 Generated_Images/
 *.json
