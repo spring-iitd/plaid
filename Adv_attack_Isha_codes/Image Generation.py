@@ -24,12 +24,15 @@ def calculate_interframe_bits_new(frame, timestamp_difference, data_rate, i):
     frame_duration = length_of_frame / data_rate
 
     # Calculating the interframe time (time gap between current and previous frames)
-    interframe_time = timestamp_difference - frame_duration
+    # interframe_time = timestamp_difference - frame_duration
 
     # Calculating the number of interframe bits based on the interframe time and data rate
-    interframe_bits = int(data_rate * interframe_time)
-
+    # interframe_bits = int(data_rate * interframe_time)
+    # print(interframe_time)
+    # print("idle time length",interframe_bits)
     # Generating a string of '2's representing the interframe bits
+    interframe_bits = round(timestamp_difference * data_rate)
+    # print("idle time length",interframe_bits)
     return '2' * interframe_bits
 
 def make_image_array(data_array, frame_type, anchor, data_rate):
@@ -132,6 +135,7 @@ def make_image_array(data_array, frame_type, anchor, data_rate):
             if i < len(data_array) - 1:
                 # Calculate interframe bits and add them to the matrix
                 timestamp_difference = data_array[i + 1][0] - data_array[i][0]
+                # print("Tdiff 1st segment",timestamp_difference)
                 interframe_bits = calculate_interframe_bits_new(data_array[i], timestamp_difference, data_rate, i)
                 for bit in interframe_bits:
                     a[x][y] = bit
@@ -229,6 +233,7 @@ def make_image_array(data_array, frame_type, anchor, data_rate):
             if i < len(data_array) - 1:
                 # Calculate interframe bits and add them to the matrix
                 timestamp_difference = data_array[i + 1][0] - data_array[i][0]
+                # print("Tdiff 2nd segment",timestamp_difference)
                 interframe_bits = calculate_interframe_bits_new(data_array[i], timestamp_difference, data_rate, i)
                 for bit in interframe_bits:
                     a[x][y] = bit
@@ -327,6 +332,7 @@ def make_image_array(data_array, frame_type, anchor, data_rate):
             if i < len(data_array) - 1:
                 # Calculate interframe bits and add them to the matrix
                 timestamp_difference = data_array[i + 1][0] - data_array[i][0]
+                # print("Tdiff 3rd segment",timestamp_difference)
                 interframe_bits = calculate_interframe_bits_new(data_array[i], timestamp_difference, data_rate, i)
                 for bit in interframe_bits:
                     a[x][y] = bit
@@ -447,6 +453,7 @@ def make_image_array(data_array, frame_type, anchor, data_rate):
             if (i < len(data_array) - 1) and y!=0:
                 # Calculate interframe bits and add them to the matrix
                 timestamp_difference = data_array[i + 1][0] - data_array[i][0]
+                # print("Tdiff 4th segment",timestamp_difference)
                 interframe_bits = calculate_interframe_bits_new(data_array[i], timestamp_difference, data_rate, i)
                 for bit in interframe_bits:
                     a[x][y] = bit
@@ -527,6 +534,7 @@ def make_image_array(data_array, frame_type, anchor, data_rate):
             if (i < len(data_array) - 1) and (x or y):
                 # Calculate interframe bits and add them to the matrix
                 timestamp_difference = data_array[i + 1][0] - data_array[i][0]
+                # print("Tdiff 5th segment",timestamp_difference)
                 interframe_bits = calculate_interframe_bits_new(data_array[i], timestamp_difference, data_rate, i)
                 for bit in interframe_bits:
                     a[x][y] = bit
@@ -613,14 +621,14 @@ def image_generation(binary_matrix, y1):
     }
 
     # Specifying the base output folder
-    base_output_folder = r"./CHD_images"
+    base_output_folder = r"./DoS_images"
     os.makedirs(base_output_folder, exist_ok=True)
 
     # Initializing a counter for the image filenames
     count = 1
 
     # Creating a text file to store the labels
-    label_file_path = os.path.join(base_output_folder, 'truth_labels.txt')
+    label_file_path = os.path.join(base_output_folder, 'DoS_labels.txt')
     with open(label_file_path, 'w') as label_file:
 
         # Iterating through each 2D list in the binary_matrix
@@ -649,7 +657,7 @@ def image_generation(binary_matrix, y1):
             output_path = os.path.join(base_output_folder, filename)
             img.save(output_path)
 
-            print("Image{} saved".format(count))
+            # print("Image{} saved".format(count))
 
             # Write the label to the truth labels file
             label_file.write(f'{filename}: {y1[idx]}\n')
@@ -671,15 +679,15 @@ def load_json(path):
 
 def main():
     
-    json_file_path = 'formatted_data_CH.json'
+    json_file_path = 'DoS_data_CH.json'
     # Load the JSON file
     data_array, frame_type, anchor = load_json(json_file_path)
-
+    print("json loaded")
     # Formation of Images
     binary_matrix, y1, stats, anchor_1, anchor_2, anchor_3, anchor_4 = make_image_array(data_array, frame_type, anchor, data_rate=500000)  #1024000
     
     image_generation(binary_matrix, y1)
-    print("All images saved in the CHD_images folder")
+    # print("All images saved in the CHD_images folder")
 
 
 if __name__ == "__main__":
