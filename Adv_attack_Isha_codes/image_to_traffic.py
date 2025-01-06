@@ -2,9 +2,40 @@ import numpy as np
 from PIL import Image
 import os
 
+# def destuff_bits(binary_string):
+#     """
+#     Removing '1' inserted after every 5 consecutive '0's in the binary string.
+
+#     Args:
+#         binary_string (str): Binary string to be destuffed.
+
+#     Returns:
+#         str: Binary string after destuffing.
+#     """
+#     result = ''
+#     count = 0
+
+#     i = 0
+#     while i < len(binary_string):
+#         bit = binary_string[i]
+#         result += bit
+#         if bit == '0':
+#             count += 1
+#             if count == 5:
+#                 # Skip the next bit if it is '1'
+#                 if i + 1 < len(binary_string) and binary_string[i + 1] == '1':
+#                     i += 1
+#                 count = 0
+#         else:
+#             count = 0
+#         i += 1
+
+#     return result
+
 def destuff_bits(binary_string):
     """
-    Removing '1' inserted after every 5 consecutive '0's in the binary string.
+    Removing the bit inserted after every 5 consecutive bits of the same polarity 
+    ('0' or '1') in the binary string.
 
     Args:
         binary_string (str): Binary string to be destuffed.
@@ -19,18 +50,23 @@ def destuff_bits(binary_string):
     while i < len(binary_string):
         bit = binary_string[i]
         result += bit
-        if bit == '0':
+
+        # Check for consecutive bits of the same polarity
+        if i > 0 and bit == binary_string[i - 1]:
             count += 1
-            if count == 5:
-                # Skip the next bit if it is '1'
-                if i + 1 < len(binary_string) and binary_string[i + 1] == '1':
-                    i += 1
-                count = 0
         else:
-            count = 0
+            count = 1
+
+        # If 5 consecutive bits are found, skip the stuffed bit
+        if count == 5:
+            if i + 1 < len(binary_string) and binary_string[i + 1] != bit:
+                i += 1  # Skip the stuffed bit
+            count = 0  # Reset the count
+
         i += 1
 
     return result
+
 
 # Constants
 PIXEL_COLOR_MAP = {
@@ -118,7 +154,21 @@ def save_to_txt(dataset, file_path):
             data_bytes_str = ','.join(data['data'])
             file.write(f"{data['timestamp']:.6f},{data['can_id']},{data['dlc']},{data_bytes_str}\n")
 
-def process_multiple_images(image_paths, output_file):
+def process_multiple_images(mutation_operation, output_file):
+    
+    if mutation_operation == "Injection":
+        image_folder = r"Images_Injection"
+    elif mutation_operation == "Modification":
+        image_folder = r"Images_Modification"
+    elif mutation_operation == "Both":
+        image_folder = r"Images_Inject_and_modify"
+    else:
+        image_folder = r"selected_images"
+    image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
+    
+    # Sort the image paths numerically based on the numeric part of the filename
+    image_paths.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+
     all_data = []
     current_timestamp = 0
 
@@ -131,11 +181,18 @@ def process_multiple_images(image_paths, output_file):
 
 def main():
 
-    image_folder = r"selected_images"
-    image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
-    output_file = "converted_traffic.txt"
+    # image_folder = r"selected_images"
+    # image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
+    mutation_operation = "Both"
+    '''
+    When using os.listdir() to get file names, the returned list contains the filenames as strings. 
+    When sorting or iterating over these strings, "10000.png" is considered lexicographically smaller than "8000.png".
+    '''
+    
+    
+    output_file = "perturbed_traffic_Both.txt"
     print("Loaded images")
-    process_multiple_images(image_paths, output_file)
+    process_multiple_images(mutation_operation, output_file)
     
 if __name__ == "__main__":
     main()

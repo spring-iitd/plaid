@@ -12,7 +12,7 @@ import torchvision.utils as vutils
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from torchvision.utils import save_image
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import time
+
 
 # Define transformations and dataset paths
 data_transforms = {
@@ -20,85 +20,33 @@ data_transforms = {
         'train': transforms.Compose([transforms.ToTensor()])
     }
 
-# def bit_stuff(data):
-#     """
-#     Perform bit stuffing for both `0`s and `1`s. If any bit of the same polarity exceeds five consecutive occurrences,
-#     it adds another bit of opposite polarity.
-#     """
-#     stuffed = ""
-#     count = 0
-#     last_bit = None  # Track the last bit to detect polarity changes
-
-#     for bit in data:
-#         # Increment the count if the bit matches the last one
-#         if bit == last_bit:
-#             count += 1
-#         else:
-#             count = 1  # Reset count for a new bit
-#             last_bit = bit  # Update the last bit tracker
-        
-#         # Add the current bit to the stuffed data
-#         stuffed += bit
-        
-#         # If we reach five consecutive bits of the same polarity, stuff the opposite bit
-#         if count == 5:
-#             stuffed += '0' if bit == '1' else '1'
-#             count = 0  # Reset the count after stuffing
-
-#     # print("stuffed:", stuffed)
-#     return stuffed
-
 def bit_stuff(data):
+    """
+    Perform bit stuffing for both `0`s and `1`s. If any bit of the same polarity exceeds five consecutive occurrences,
+    it adds another bit of opposite polarity.
+    """
     stuffed = ""
     count = 0
+    last_bit = None  # Track the last bit to detect polarity changes
+
     for bit in data:
-        if bit == '1':
+        # Increment the count if the bit matches the last one
+        if bit == last_bit:
             count += 1
-            stuffed += bit
-            if count == 5:
-                stuffed += '0'
-                count = 0
         else:
-            stuffed += bit
-            count = 0
-    return stuffed
-
-def stuff_bits(binary_string):
-    """
-    Inserting '1' after every 5 consecutive '0's in the binary string.
-
-    Args:
-        binary_string (str): Binary string to be stuffed.
-
-    Returns:
-        str: Binary string after stuffing.
-
-    """
-    result = ''
-
-    # Initialize a count for consecutive 0's
-    count = 0
-
-    for bit in binary_string:
-
-        # Appending the current bit to the result string
-        result += bit
+            count = 1  # Reset count for a new bit
+            last_bit = bit  # Update the last bit tracker
         
-        # Incrementing the count if the current bit is 0
-        if bit == '0':
-            count += 1
-            
-            # Inserting a 1 after 5 consecutive 0's
-            if count == 5:
-                result += '1'
-                # Reseting the count after inserting the 1
-                count = 0
-        else:
-            # Reseting the count if the current bit is not 0
-            count = 0
+        # Add the current bit to the stuffed data
+        stuffed += bit
+        
+        # If we reach six consecutive bits of the same polarity, stuff the opposite bit
+        if count == 5:
+            stuffed += '0' if bit == '1' else '1'
+            count = 0  # Reset the count after stuffing
 
-    return result
-
+    print("stuffed:", stuffed)
+    return stuffed
 
 
 def crc_remainder(input_bitstring, polynomial_bitstring, initial_filler):
@@ -145,7 +93,7 @@ def evaluation_metrics(all_preds, all_labels,max_perturbations,perturbation_type
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0, 1])
     disp.plot(cmap=plt.cm.Blues)
     plt.title('Confusion Matrix')
-    # plt.savefig('./CF_Injection_Random_20_densenet161/cf_{}_{}.png'.format(perturbation_type,max_perturbations), dpi=300)
+    # plt.savefig('./CF/perturb_attack_only/cf_{}_{}.png'.format(perturbation_type,max_perturbations), dpi=300)
     plt.show()
     
 
@@ -278,8 +226,7 @@ def saving_image(img, name,perturbation_type,max_perturbations):
     # to_pil = transforms.ToPILImage()
     # img = to_pil(img)
     # img.save('./Perturbed_attack_images_max_grad20/perturbed_image_{}.png'.format(name))
-    # print(f"Current working directory: {os.getcwd()}")
-    save_image(img,f'./Images_Injection/perturbed_image_{name}.png')
+    save_image(img, f'./test_{perturbation_type}_densenet201_{max_perturbations}inj/perturbed_image_{name}.png')
     # img.save(name)
 
 def print_image(img,n,pack):
@@ -331,142 +278,173 @@ def print_bits_from_image(image,mask):
             print("length of binary representation:",len(binary_representation))
             print(f"Perturbed bits for batch {b}, row {row}: {binary_representation}")
 
-def compute_row_gradient_magnitude(data_grad, row_idx):
+def select_row_to_perturb(mask, data_grad, matched_rows,selected_rows_set):
+    """
+    Select the row from matched rows that has the maximum gradient in the specified mask bits.
+    Avoids re-selecting rows that have already been perturbed by skipping them.
 
-    """Computes the gradient magnitude for a specific row in the data gradient."""
-    return data_grad[:, :, row_idx, :].abs().sum(dim=(1, 2))
+    Parameters:
+        - image: The input image.
+        - mask: The current mask indicating where perturbations can be applied.
+        - data_grad: The gradient of the image (used to determine the regions with the highest gradient).
+        - matched_rows: The list of rows that match the pattern.
+        - bit_pattern: The bit pattern used to generate the mask.
+        - mask_length: The length of the mask applied to each row (64 bits).
+        - selected_rows_set: A set of rows that have already been selected for perturbation (to avoid re-selection).
 
-def update_max_grad(row_grad_magnitude, max_grad, max_grad_row, row_idx, all_green):
+    Returns:
+        - selected_row: The row with the highest gradient to perturb.
+        - updated_mask: The updated mask with only the selected row's bits active.
+        - selected_rows_set: The updated set of selected rows.
+    """
+    gradients = []
 
-    """Updates the row with maximum gradient magnitude if all pixels in the row are green."""
-    update_mask = (row_grad_magnitude > max_grad) & all_green
-    max_grad = torch.where(update_mask, row_grad_magnitude, max_grad)
-    max_grad_row = torch.where(update_mask, torch.tensor(row_idx, device=max_grad.device), max_grad_row)
-    return max_grad, max_grad_row
+    # # Initialize the set of selected rows if it doesn't exist
+    # if selected_rows_set is None:
+    #     selected_rows_set = set()
 
-def create_mask_for_max_grad_row(mask, max_grad_row, image_shape):
-    """Creates a mask that applies only to the identified rows with maximum gradient."""
-    for b in range(image_shape[0]):
-        mask[b, :, max_grad_row[b], :] = 1  # Applying on all columns of the identified row
-    return mask
+    # Loop over each matched row
+    for row in matched_rows:
+        # Skip rows that have already been selected
+        if row in selected_rows_set:
+            continue
 
-def initialize_max_grad_variables(batch_size, num_rows, device):
-    """Initializes tensors for tracking the maximum gradient and corresponding row index."""
-    max_grad = torch.zeros(batch_size, device=device)
-    max_grad_row = torch.zeros(batch_size, dtype=torch.long, device=device)
-    return max_grad, max_grad_row
+        # Extract the gradients for the current row only in the active mask bits
+        row_mask = mask[:, :, row, :].bool()  # Binary mask for this row's bits
+        row_grad = data_grad[:, :, row, :]  # Gradient values for the row
 
-def extract_color_channels(image):
-    """Extracts the red, green, and blue channels from an image tensor."""
-    red_channel = image[:, 0, :, :]
-    green_channel = image[:, 1, :, :]
-    blue_channel = image[:, 2, :, :]
-    return red_channel, green_channel, blue_channel
+        # Compute the gradient magnitude only where the mask is active
+        gradient_magnitude = row_grad.abs() * row_mask
+        total_gradient = gradient_magnitude.sum().item()  # Compute total gradient magnitude
 
-def create_green_mask(red_channel, green_channel, blue_channel):
-    """Creates a mask for rows where all pixels are exactly (0, 1, 0), i.e., green."""
-    return (red_channel == 0) & (green_channel == 1) & (blue_channel == 0)
+        # Store the row index and total gradient magnitude
+        gradients.append((row, total_gradient))
 
-def find_rows_with_green(green_mask):
-    """Finds rows that contain green pixels by summing along the width dimension."""
-    No_green_row = False
-    row_sums = green_mask.sum(dim=-1)
-    green_rows = (row_sums == 128).nonzero(as_tuple=True)[1]
-    # print("green rows",green_rows)
-    
-    if green_rows.numel() == 0:  # If no green rows found
-        No_green_row = True
-        
-    return green_rows, No_green_row
+    if gradients:
+        # Select the row with the maximum total gradient magnitude
+        selected_row, _ = max(gradients, key=lambda x: x[1])
+        # print(f"Selected row: {selected_row}, Gradient magnitude: {_}")
 
-def select_random_rows(rows_with_green, numberofrows):
-    """Randomly selects a specified number of rows from the rows that contain green pixels."""
-    if len(rows_with_green) > numberofrows:
-        selected_rows = torch.randperm(len(rows_with_green))[:numberofrows]
-        return rows_with_green[selected_rows]
+        # Update the mask to keep only the selected row's active bits
+        updated_mask = torch.zeros_like(mask)
+        updated_mask[:, :, selected_row, :] = mask[:, :, selected_row, :]
+
+        # Add the selected row to the set of selected rows
+        selected_rows_set.add(selected_row)
+        # print("Updated selected rows set:", selected_rows_set)
+        return selected_row, updated_mask,selected_rows_set
     else:
-        return rows_with_green
+        # If no rows are available, return None
+        updated_mask = torch.zeros_like(mask)
+        return None, updated_mask,selected_rows_set
 
-def initialize_mask(image):
-    """Initializes a mask of zeros with the same dimensions as the input image."""
-    mask = torch.zeros_like(image, dtype=torch.float)
-    # print("Printing mask-----------",torch.all(mask == 0))
-    return mask
+def find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows):
+    # If matched_rows is empty, perform the initial computation to find rows matching the pattern
+    if matched_rows is None:
+        # print("matched rows None")
+        matched_rows = []
+        
+    for i in range(image.shape[2]):  # Iterate over rows in the image
+        matches_pattern = torch.ones(image.shape[0], dtype=torch.bool, device=image.device)
 
-def create_mask(mask, selected_rows):
-    """Sets the selected rows in the mask to 1."""
-    for row in selected_rows:
-        mask[:, :, row, :] = 1.0
-    return mask
+        for j in range(pattern_length):
+            r, g, b = rgb_pattern[j]
+            matches_pattern &= (image[:, 0, i, j] == r) & (image[:, 1, i, j] == g) & (image[:, 2, i, j] == b)
 
-def generate_multiple_mask_random(image, pack):
-    red_channel, green_channel, blue_channel = extract_color_channels(image)
-    green_mask = create_green_mask(red_channel, green_channel, blue_channel)
-    # print("green_mask",green_mask)
-    rows_with_green,No_green_row = find_rows_with_green(green_mask)
-    # print("rows_with_green",rows_with_green)
-    if No_green_row:
-        return None
-    selected_rows = select_random_rows(rows_with_green, pack)
-    mask = initialize_mask(image)
-    mask = create_mask(mask, selected_rows)
+        # Debug: Check matches for current row
+        # print(f"Row {i} - Matches Pattern: {matches_pattern}")
+
+        if matches_pattern.any():
+            # Collect row indices of matching rows
+            matched_rows.extend(
+                [i for b in range(image.shape[0]) if matches_pattern[b]]
+            )
+
+    print("Initial matched rows:", matched_rows)
+    max_perturbations = len(matched_rows)
+    return matched_rows, max_perturbations
+
+def generate_mask_modify(image, data_grad, matched_rows,selected_rows_set,bit_pattern):
+    """
+    Generate a mask for the image that matches the bit pattern and applies bit stuffing.
+    Calls `select_row_to_perturb` to decide which row to perturb based on gradients.
+    Ensures selected rows are not reused. Iterates over rows only once.
+    """
+    mask_length = 64
+    # print("matched_rows in generate mask modify",matched_rows)
+    # Initialize matched_rows and selected_rows_set if not provided
     
-    return mask
+    if selected_rows_set is None:
+        selected_rows_set = set()
 
-def generate_max_grad_mask(image, data_grad):
-    # Assuming 'image' is of shape [batch_size, 3, 128, 128]
-    # We need to identify the green channel which is the 2nd channel in this format
+    mask = torch.zeros_like(data_grad)  # Initialize mask with zeros
     
-    red_channel, green_channel, blue_channel = extract_color_channels(image)
+    rgb_pattern = [(0.0, 0.0, 0.0) if bit == '0' else (1.0, 1.0, 1.0) for bit in bit_pattern]
+    pattern_length = len(rgb_pattern)
     
-    green_mask = create_green_mask(red_channel, green_channel, blue_channel)
+    if not matched_rows:
+        # print("No matched rows provided. Searching for rows matching the pattern.")
+        matched_rows, max_perturbations = find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows)
 
-    max_grad, max_grad_row = initialize_max_grad_variables(green_channel.shape[0], green_channel.shape[1], image.device)
+    # Filter matched_rows to exclude rows in selected_rows_set
+    filtered_matched_rows = [row for row in matched_rows if row not in selected_rows_set]
+    # print("Filtered matched rows:", filtered_matched_rows)
 
-    for i in range(green_channel.shape[1]):  # iterate over rows
-        # Check if all pixels in the row are green
-        all_green = green_mask[:, i, :].all(dim=1)
+    # If no rows remain after filtering, return an empty mask
+    if not filtered_matched_rows:
+        # print("No rows available for perturbation. Returning empty mask.")
+        return torch.zeros_like(mask), 0, matched_rows, selected_rows_set
 
-        # Compute gradient magnitude for the row
-        row_grad_magnitude = compute_row_gradient_magnitude(data_grad, i)
-
-        max_grad, max_grad_row = update_max_grad(row_grad_magnitude, max_grad, max_grad_row, i, all_green)
-
-    # Create a mask to apply the sign data gradient only in the identified rows with max gradient
-    mask = initialize_mask(data_grad)
-    mask = create_mask_for_max_grad_row(mask, max_grad_row, image.shape)
+    # Apply the mask for rows that match the pattern and are not yet selected
+    for row in filtered_matched_rows:
+        for b in range(image.shape[0]):
+            mask[b, :, row, pattern_length:pattern_length + mask_length] = 1
     
-    return mask
+    
+    # print("Initial mask:")
+    # print_image(mask,1,1)
+    # print_bits_from_image(mask,mask)
+    # Call the function to select the row with the maximum gradient from the filtered rows
+    selected_row, updated_mask, selected_rows_set = select_row_to_perturb(mask, data_grad, filtered_matched_rows, selected_rows_set)
 
-def apply_constraint(image, mask,perturbed_image ):
-     # Ensure the identified row's pixels are modified according to the fixed pattern and CRC bit stuffing
+    # Mark the selected row as used
+    selected_rows_set.add(selected_row)
+    # print("Updated mask:")
+    # print_image(updated_mask,1,1)
+    # print_bits_from_image(updated_mask,updated_mask)
+
+    return updated_mask, matched_rows, selected_rows_set
+
+def fgsm_attack_modify(image,data_grad, epsilon,perturbation_type , pack,matched_rows,selected_rows_set,bit_pattern):
+    # Collect the element-wise sign of the data gradient    
+    sign_data_grad = data_grad.sign()
+    # sign_data_grad = data_grad
+    # print("matched_rows in fgsm attack modify",matched_rows)
+    # Create a mask to apply sign data grad only in the rows with max gradient magnitude
+    mask,matched_rows,selected_rows_set = generate_mask_modify(image, data_grad,matched_rows,selected_rows_set,bit_pattern)
+    sign_data_grad = sign_data_grad * mask
+    
+    # print("Image before perturbation")
+    # print_image(image,1,pack)
+    # print_bits_from_image(image,mask)
+    # print_image(mask,1,pack)
+    # print("before perturbation image.........",image[b, :, row, 0:128])
+    # Create the perturbed image by adjusting each pixel of the input image
+    perturbed_image = image + epsilon * sign_data_grad
+
+    # Ensure the identified rows' pixels are either (0, 0, 0) or (256, 256, 256)
     for b in range(image.shape[0]):
-        row = mask[b, 0].nonzero(as_tuple=True)[0]  # Identified row index
-        if len(row) > 0:  # Only apply if a row is identified
-            row = row[0].item()
-            # print("before perturbation",perturbed_image[b, :, row, :])
-            # fixed_pattern = "0 00001000100110000 01 0 0 1000"
-            #fixed_pattern = (sof, id, RTR, IDE bit, r0, DLC)
-            fixed_pattern = "00010011000001001000"
-            for i, bit in enumerate(fixed_pattern):
-                value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, i] = value
-                # colored black or white
-                # Get the edited part and its length
-            
-            # edited_part = perturbed_image[b, :, row, :len(fixed_pattern)]
-            # length_of_edited_part = edited_part.shape[1]  # Length in terms of pixels
-
-            # Print the edited part and its length
-            # print("Edited part:", edited_part)
-            # print("Length of edited part:", length_of_edited_part)
-
-          
-            # perturbation_bits = ''.join(['1' if perturbed_image[b, :, row, len(fixed_pattern) + i] > 0.5 else '0' for i in range(64)])
-            perturbation_bits = ''
-            # print("Perturbation bits:", perturbation_bits,len(perturbation_bits))
-            
-            for col in range(len(fixed_pattern), len(fixed_pattern)+64):
+        # print(mask[b,0])
+        # print(mask[b,0].nonzero())
+        
+        rows = mask[b, 0].nonzero(as_tuple=True)[0]  # Identified row indices
+        rows = torch.unique(rows)
+        # print(rows)
+        perturbation_bits = ''
+        for row in rows:
+            # print("image.........",image[b, :, row, 0:128])
+            # print("random perturbed image.........",perturbed_image[b, :, row, 0:128])
+            for col in range(len(bit_pattern), len(bit_pattern)+64):
                 pixel_value = perturbed_image[b, :, row, col]
                 dot_product_with_1 = torch.dot(pixel_value, torch.tensor([1.0, 1.0, 1.0], device=image.device))
                 dot_product_with_0 = torch.dot(pixel_value, torch.tensor([0.0, 0.0, 0.0], device=image.device))
@@ -476,105 +454,74 @@ def apply_constraint(image, mask,perturbed_image ):
                 else:
                     perturbed_image[b, :, row, col] = 0.0  # Set to (0, 0, 0)
                     perturbation_bits +='0'
-            # print("log2 data", perturbed_image[b, :, row, len(fixed_pattern):84])
-            # print("log2 data length", perturbed_image[b, :, row, len(fixed_pattern):84].shape[1])
-            # print("perturbation_bits",perturbation_bits)
-            # Calculate CRC (sof, id,rtr, idebit, ro, dlc,data ) crc is calculated on raw data not he bit stuffed data
+                
+       
+            # print("projected perturbation.........",perturbed_image[b, :, row, 0:128])
             stuffed_perturbation_bits = bit_stuff(perturbation_bits)
-            # print("length of stuffed perturbed bits",len(stuffed_perturbation_bits),stuffed_perturbation_bits)
-            # Reassign the stuffed bits back to `perturbed_image`
+            print("perturbation bits",perturbation_bits,len(perturbation_bits),type(perturbation_bits))
+            print("stuffed perturbation bits",stuffed_perturbation_bits,len(stuffed_perturbation_bits))
             for i,bit in enumerate(stuffed_perturbation_bits):
                 value = 1.0 if bit =='1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + i] = value
+                perturbed_image[b, :, row, len(bit_pattern) + i] = value
 
-            # print("log2 data perturbed data", perturbed_image[b, :, row, len(fixed_pattern):len(fixed_pattern)+len(stuffed_perturbation_bits)])
-
-            crc_input = '0' + '00100110000' + '0' + '0' + '0' + '1000' + perturbation_bits
+            crc_input = '0' + '00000000000' + '0' + '0' + '0' + '1000' + perturbation_bits
             crc_output = calculate_crc(crc_input)
             crc_output = bin(crc_output)[2:].zfill(15)
             # crc_output = crc_remainder(crc_input, '100000111', '0')
             bit_stuffed_crc = bit_stuff(crc_output[:15])
-            
+            # print("bit studded crc",bit_stuffed_crc)
             # Apply bit-stuffed CRC to the next 15 pixels
             for i, bit in enumerate(bit_stuffed_crc):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + len(stuffed_perturbation_bits) + i] = value
+                perturbed_image[b, :, row, len(bit_pattern) + len(stuffed_perturbation_bits) + i] = value
 
-            # print("log3 crc", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits):len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)])
-            # print("log3 crc len", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits):len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)].shape[1])
+            # print("log3 crc", perturbed_image[b, :, row, len(bit_pattern)+len(stuffed_perturbation_bits):len(bit_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)])
+            # print("log3 crc len", perturbed_image[b, :, row, len(bit_pattern)+len(stuffed_perturbation_bits):len(bit_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)].shape[1])
             #ending part = (CRC del, ack, ack del, EoF, IFS)
             ending_part = '1011111111111'
             for i, bit in enumerate(ending_part):
                 value = 1.0 if bit == '1' else 0.0
-                perturbed_image[b, :, row, len(fixed_pattern) + len(stuffed_perturbation_bits)+ len(bit_stuffed_crc)+ i] = value
-                # perturbed_image[b, 1, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
-                # perturbed_image[b, 2, row, len(fixed_pattern) + len(perturbation_bits) +len(ending_part)+ i] = value
-                # print(perturbed_image[b, :, row, len(fixed_pattern) + 64 +len(ending_part)+ i])
+                perturbed_image[b, :, row, len(bit_pattern) + len(stuffed_perturbation_bits)+ len(bit_stuffed_crc)+ i] = value
+                
             
-            # print("log4 ending part ", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits)+15:len(fixed_pattern)+len(stuffed_perturbation_bits)+15+len(ending_part)])
+            # print("log4 ending part ", perturbed_image[b, :, row, len(bit_pattern)+len(stuffed_perturbation_bits)+15:len(bit_pattern)+len(stuffed_perturbation_bits)+15+len(ending_part)])
             # print("log4 len ", perturbed_image[b, :, row, 84+len(bit_stuffed_crc):84+len(bit_stuffed_crc)+len(ending_part)].shape[1])
-            # Mark the rest of the pixels in the row as green
-            for i in range(len(fixed_pattern) + len(stuffed_perturbation_bits) +len(bit_stuffed_crc)+len(ending_part), 128):
+            # # Mark the rest of the pixels in the row as green
+            for i in range(len(bit_pattern) + len(stuffed_perturbation_bits) +len(bit_stuffed_crc)+len(ending_part), 128):
                 perturbed_image[b, 1, row, i] = 1.0  # Set green channel to maximum
                 perturbed_image[b, 0, row, i] = 0.0
                 perturbed_image[b, 2, row, i] = 0.0
-            
-            # print("log5 green portion", perturbed_image[b, :, row, len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+len(ending_part):128])
-            # print("log5 len green", perturbed_image[b, :, row,len(fixed_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+ len(ending_part):128].shape[1])
+            # print("log5 green portion", perturbed_image[b, :, row, len(bit_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+len(ending_part):128])
+            # print("log5 len green", perturbed_image[b, :, row,len(bit_pattern)+len(stuffed_perturbation_bits)+len(bit_stuffed_crc)+ len(ending_part):128].shape[1])
 
-            # print("packet length",len(fixed_pattern) + len(stuffed_perturbation_bits) + len(ending_part)+len(bit_stuffed_crc))
-            # print(len(fixed_pattern))
-            # print("data",len(stuffed_perturbation_bits))
-            # print(len(ending_part))
-            # print(len(bit_stuffed_crc))
-            
-            # print("perturbed bits:", perturbed_image[b, :, row, :])
-    # Adding clipping to maintain [0,1] range
+
+        # print("IMage after perturbation")
+        # print("final image", perturbed_image[b, :, row, 0:128])
+        print_image(perturbed_image,1,pack)
+        # print_bits_from_image(perturbed_image,mask)
+    
+    # Return the perturbed image
+     # Adding clipping to maintain [0,1] range
     perturbed_image = torch.clamp(perturbed_image, 0, 1)
-    return perturbed_image
+    return perturbed_image,matched_rows,selected_rows_set
 
-def fgsm_attack_valid(image, data_grad,ep,perturbation_type,pack):
-    # Collect the element-wise sign of the data gradient
-    sign_data_grad = data_grad.sign()
-    if perturbation_type == "Random":
-        mask = generate_multiple_mask_random(image, pack=1) 
-
-    else:
-        mask = generate_max_grad_mask(image, data_grad)
-
-    if mask == None:
-        print("No more green rows")
-        return None
-    # print_image(mask,1,pack)
-    # print("first image - all channels- first row- all columns",image[0, :, 0, :])
-    sign_data_grad = sign_data_grad * mask
-
-    # Create the perturbed image by adjusting each pixel of the input image
-    perturbed_image = image + ep * sign_data_grad
-    # print_bits_from_image(perturbed_image,mask)
-    # print_image(perturbed_image,1,pack)
-    perturbed_image = apply_constraint(image,mask,perturbed_image)
-    # print_image(perturbed_image,1,pack)
-    return perturbed_image
-
-def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,perturbation_type):
+def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,perturbation_type,matched_rows,selected_rows_set,bit_pattern):
     
-    
-    perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type,pack)
+    # print("matched_rows in apply_fgsm and check",matched_rows)
+    # perturbed_data = fgsm_attack_valid(data_denorm, data_grad,ep,perturbation_type,pack)
+    perturbed_data,matched_rows,selected_rows_set = fgsm_attack_modify(data_denorm,data_grad, ep,perturbation_type , pack,matched_rows,selected_rows_set,bit_pattern)
     # print_image(perturbed_data,2,pack)
-  
+    
     if perturbed_data is None:
         print("No more space to inject")
-        output = test_model(data_denorm)
-        final_pred = output.max(1, keepdim=True)[1]
-        return False, pack, final_pred, data_denorm  
+        return False, pack, final_pred, perturbed_data 
     
     with torch.no_grad():
         output = test_model(perturbed_data)
 
 
     pred_probs = torch.softmax(output, dim=1)
-    # print("Probability of prediction",pred_probs)
+    print("Probability of prediction",pred_probs)
     # Get the predicted class index
     final_pred = output.max(1, keepdim=True)[1] # index of the maximum log-probability
     # print("predicted, label ",final_pred.item(), target.item())
@@ -583,19 +530,20 @@ def apply_fgsm_and_check( pack, test_model,target,data_grad,data_denorm,ep,pertu
     #for 0-benign, 1-attack
     if final_pred.item() == target.item():
         # print("Perturbation {} not successful. Injecting more perturbation.".format(pack))
-        return True, pack+1, final_pred, perturbed_data  # Indicate that we need to reapply
+        return True, pack+1, final_pred, perturbed_data,matched_rows,selected_rows_set  # Indicate that we need to reapply
     else:
         # print("Perturbation {} successful. No more injection needed, return pack as final perturbation".format(pack))
-        return False, pack, final_pred, perturbed_data  # Indicate that we can stop
+        return False, pack, final_pred, perturbed_data,matched_rows,selected_rows_set  # Indicate that we can stop
     
-
 def Attack_procedure(model, test_model, device, test_loader, perturbation_type, ep, max_perturbations):
     pack = 1
     all_preds = []
     all_labels = []
     n_image = 1
     # target_model = test_model
-
+    bit_pattern = "0000010000010000011000"
+    rgb_pattern = [(0.0, 0.0, 0.0) if bit == '0' else (1.0, 1.0, 1.0) for bit in bit_pattern]
+    pattern_length = len(rgb_pattern)
     for data, target in test_loader:
         # print(f"Current target shape: {target.shape}, value: {target}")
         data, target = data.to(device), target.to(device)
@@ -624,7 +572,12 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
             
             data_denorm = denorm(data)
             continue_perturbation = True
-            
+            matched_rows = None
+            selected_rows_set = None
+
+            _,max_perturbations = find_max_perturbations(data_denorm,pattern_length,rgb_pattern,matched_rows)
+            print("max_perturbations",max_perturbations)
+
             while continue_perturbation and perturbation_count <= max_perturbations:
                 
                 if continue_perturbation:
@@ -638,18 +591,25 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
                     new_loss.backward()
                     data_grad = perturbed_data.grad.data
                 
-                
-                continue_perturbation, pack, final_pred, data_denorm = apply_fgsm_and_check(pack, test_model, target, data_grad, perturbed_data, ep, perturbation_type)
-                perturbation_count += 1                    
+                # print("matched_rows in attack procedure",matched_rows)
+                continue_perturbation, pack, final_pred, data_denorm,matched_rows,selected_rows_set = apply_fgsm_and_check(pack, test_model, target, data_grad, perturbed_data, ep, perturbation_type,matched_rows,selected_rows_set,bit_pattern)
+                perturbation_count += 1
+                # print("perturbation count in attack procedure",perturbation_count)
+                # print("max perturbations in attack procedure.....",max_perturbations)
+                # print("continue_perturbation in attack procedure",continue_perturbation)      
+                # print("matched rows in attack procedure.....",matched_rows)  
+                # print("selected rows in attack procedure.....",selected_rows_set)
 
-            saving_image(data_denorm,n_image,perturbation_type,max_perturbations)
+
+
+            # saving_image(data_denorm,n_image,perturbation_type,max_perturbations)
         else:
             data.requires_grad = True
             model.eval()
             initial_output = model(data)
             final_pred = initial_output.max(1, keepdim=True)[1]
             print("Image no:", n_image, "(Benign image - skipping perturbation)")
-            saving_image(data,n_image,perturbation_type,max_perturbations)
+            # saving_image(data,n_image,perturbation_type,max_perturbations)
         
         # target_output = target_model(data_denorm)
         # pp = torch.softmax(target_output, dim=1)
@@ -665,7 +625,6 @@ def Attack_procedure(model, test_model, device, test_loader, perturbation_type, 
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
     # with open("perturb attack_preds.txt", "w") as file: file.write("\n".join(all_preds.squeeze()) + "\n")
-    
     return all_preds.squeeze(), all_labels
     
 
@@ -682,9 +641,12 @@ def main():
     surr_model_type='densenet161'
 
     #Define paths for dataset and model
-    # test_dataset_dir = './image'
     test_dataset_dir = './selected_images'
+    # test_dataset_dir = './image'
+    # train_dataset_dir = './selected_images'
+    # surr_model_path = './Trained_Models/custom_cnn_model_chd_resnet_ 1.pth'
     surr_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_161.pth"
+    # feedback_model_path =  './Trained_Models/custom_cnn_model_chd_resnet_ 1.pth'
     test_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_161.pth"
     # test_model_path = "./Trained_Models/custom_cnn_model_chd_densenet_201.pth"
     # test_label_file = "./image/image.txt"
@@ -705,12 +667,11 @@ def main():
     
     # Define the parameters
     epsilon = 1
-    perturbation_type = "Random"   
+    perturbation_type = "Max_grad"   
    # List of max_perturbations to iterate over
-    max_perturbations_list = [20]
+    max_perturbations_list = [0]
     # max_perturbations_list = [1, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60]
-    st = time.time()
-    print("Start time:", st)
+
     # Loop through the list of max_perturbations
     for max_perturbations in max_perturbations_list:
         print("--------------------------------")
@@ -718,24 +679,20 @@ def main():
 
         # Call the attack procedure 
         preds, labels = Attack_procedure(model, test_model, device, test_loader, perturbation_type, epsilon, max_perturbations)
-        et = time.time()
-        print("End time:", et)
-        # print("Labels:", labels)
-        # print("Predictions:", preds)
+        
+        print("Labels:", labels)
+        print("Predictions:", preds)
         
         
         tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall,IDS_F1 = evaluation_metrics(preds, labels,max_perturbations,perturbation_type)
-        print("----------------IDS Perormance Metric----------------")
         print(f'Accuracy: {IDS_accu:.4f}')
         print(f'Precision: {IDS_prec:.4f}')
         print(f'Recall: {IDS_recall:.4f}')
         print(f'F1 Score: {IDS_F1:.4f}')
-
-        print("----------------Adversarial attack Perormance Metric----------------")
         print("TNR:", tnr)
-        print("Malcious Detection Rate:", mdr)
-        print("Attack Success Rate:", oa_asr)
-        print("Execution Time:", et-st)
+        print("MDR:", mdr)
+        print("OA_ASR:", oa_asr)
+
 
 
 if __name__ == "__main__":
