@@ -143,9 +143,10 @@ def process_image(image_path, initial_timestamp=0):
         })
         
         frame_length = len(frame)
-        # print(frame_length,idle_time)
+        print(frame_length,idle_time)
+        print(idle_time/BUS_RATE)
         timestamp += (frame_length / BUS_RATE) + (idle_time / BUS_RATE)
-        # print(timestamp)
+        
     return dataset, timestamp
 
 def save_to_txt(dataset, file_path):
@@ -162,6 +163,8 @@ def process_multiple_images(mutation_operation, output_file):
         image_folder = r"Images_Modification"
     elif mutation_operation == "Both":
         image_folder = r"Images_Inject_and_modify"
+    elif mutation_operation == "test":
+        image_folder = r"sampled_DoS_images"
     else:
         image_folder = r"selected_images"
     image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
@@ -183,14 +186,14 @@ def main():
 
     # image_folder = r"selected_images"
     # image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
-    mutation_operation = "Both"
+    mutation_operation = "test"
     '''
     When using os.listdir() to get file names, the returned list contains the filenames as strings. 
     When sorting or iterating over these strings, "10000.png" is considered lexicographically smaller than "8000.png".
     '''
     
     
-    output_file = "perturbed_traffic_Both.txt"
+    output_file = "sampled_traffic.txt"
     print("Loaded images")
     process_multiple_images(mutation_operation, output_file)
     
