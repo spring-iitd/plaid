@@ -2,40 +2,9 @@ import numpy as np
 from PIL import Image
 import os
 
-# def destuff_bits(binary_string):
-#     """
-#     Removing '1' inserted after every 5 consecutive '0's in the binary string.
-
-#     Args:
-#         binary_string (str): Binary string to be destuffed.
-
-#     Returns:
-#         str: Binary string after destuffing.
-#     """
-#     result = ''
-#     count = 0
-
-#     i = 0
-#     while i < len(binary_string):
-#         bit = binary_string[i]
-#         result += bit
-#         if bit == '0':
-#             count += 1
-#             if count == 5:
-#                 # Skip the next bit if it is '1'
-#                 if i + 1 < len(binary_string) and binary_string[i + 1] == '1':
-#                     i += 1
-#                 count = 0
-#         else:
-#             count = 0
-#         i += 1
-
-#     return result
-
 def destuff_bits(binary_string):
     """
-    Removing the bit inserted after every 5 consecutive bits of the same polarity 
-    ('0' or '1') in the binary string.
+    Removing '1' inserted after every 5 consecutive '0's in the binary string.
 
     Args:
         binary_string (str): Binary string to be destuffed.
@@ -50,22 +19,53 @@ def destuff_bits(binary_string):
     while i < len(binary_string):
         bit = binary_string[i]
         result += bit
-
-        # Check for consecutive bits of the same polarity
-        if i > 0 and bit == binary_string[i - 1]:
+        if bit == '0':
             count += 1
+            if count == 5:
+                # Skip the next bit if it is '1'
+                if i + 1 < len(binary_string) and binary_string[i + 1] == '1':
+                    i += 1
+                count = 0
         else:
-            count = 1
-
-        # If 5 consecutive bits are found, skip the stuffed bit
-        if count == 5:
-            if i + 1 < len(binary_string) and binary_string[i + 1] != bit:
-                i += 1  # Skip the stuffed bit
-            count = 0  # Reset the count
-
+            count = 0
         i += 1
 
     return result
+
+# def destuff_bits(binary_string):
+#     """
+#     Removing the bit inserted after every 5 consecutive bits of the same polarity 
+#     ('0' or '1') in the binary string.
+
+#     Args:
+#         binary_string (str): Binary string to be destuffed.
+
+#     Returns:
+#         str: Binary string after destuffing.
+#     """
+#     result = ''
+#     count = 0
+
+#     i = 0
+#     while i < len(binary_string):
+#         bit = binary_string[i]
+#         result += bit
+
+#         # Check for consecutive bits of the same polarity
+#         if i > 0 and bit == binary_string[i - 1]:
+#             count += 1
+#         else:
+#             count = 1
+
+#         # If 5 consecutive bits are found, skip the stuffed bit
+#         if count == 5:
+#             if i + 1 < len(binary_string) and binary_string[i + 1] != bit:
+#                 i += 1  # Skip the stuffed bit
+#             count = 0  # Reset the count
+
+#         i += 1
+
+#     return result
 
 
 # Constants
@@ -120,21 +120,26 @@ def process_image(image_path, initial_timestamp=0):
     
 
     dataset = []
+    # print(frames)
 
     for frame, idle_time in frames:
-        # print("curr frame and idle time",current_frame,idle_time)
+        # print("curr frame and idle time",frame,idle_time)
         binary_string = ''.join(frame)
         # print(" before destuffing",binary_string)
         binary_string = destuff_bits(binary_string)
         # print("length after destuffing",len(binary_string))
         # print("binary_string after destuffing",len(binary_string),binary_string)
         can_id = hex(int(binary_string[1:12], 2))[2:].zfill(3)
+
         # print("can_id",can_id)
         # print("dlc",binary_string[16])
         dlc = int(binary_string[15:19], 2)
         # print("dlc",dlc)
-        data_bytes = [hex(int(binary_string[20 + i*8:28 + i*8], 2))[2:].zfill(2) for i in range(dlc)]
-        
+        # data_bytes = [hex(int(binary_string[19 + i*8:28 + i*8], 2))[2:].zfill(2) for i in range(dlc)]
+        data_bits = binary_string[19:19 + dlc * 8]
+        data_bytes = [hex(int(data_bits[i:i+8], 2))[2:].zfill(2) for i in range(0, len(data_bits), 8)]
+
+        # print("data",data_bytes)
         dataset.append({
             'timestamp': round(timestamp, 6),
             'can_id': can_id,
@@ -143,10 +148,12 @@ def process_image(image_path, initial_timestamp=0):
         })
         
         frame_length = len(frame)
-        print(frame_length,idle_time)
-        print(idle_time/BUS_RATE)
-        timestamp += (frame_length / BUS_RATE) + (idle_time / BUS_RATE)
-        
+        # print(idle_time,BUS_RATE)
+        # print("with framelength",(idle_time+frame_length)/BUS_RATE)
+        # timestamp += (frame_length / BUS_RATE) + (idle_time / BUS_RATE)
+
+        timestamp += (idle_time / BUS_RATE)
+        # print(timestamp)
     return dataset, timestamp
 
 def save_to_txt(dataset, file_path):
@@ -186,14 +193,14 @@ def main():
 
     # image_folder = r"selected_images"
     # image_paths = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
-    mutation_operation = "test"
+    mutation_operation = "None"
     '''
     When using os.listdir() to get file names, the returned list contains the filenames as strings. 
     When sorting or iterating over these strings, "10000.png" is considered lexicographically smaller than "8000.png".
     '''
     
     
-    output_file = "sampled_traffic.txt"
+    output_file = "original_traffic.txt"
     print("Loaded images")
     process_multiple_images(mutation_operation, output_file)
     
