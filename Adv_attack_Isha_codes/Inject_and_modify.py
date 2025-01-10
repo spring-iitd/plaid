@@ -21,32 +21,41 @@ data_transforms = {
         'train': transforms.Compose([transforms.ToTensor()])
     }
 
-def bit_stuff(data):
+def stuff_bits(binary_string):
     """
-    Perform bit stuffing for both `0`s and `1`s. If any bit of the same polarity exceeds five consecutive occurrences,
-    it adds another bit of opposite polarity.
+    Inserting '1' after every 5 consecutive '0's in the binary string.
+
+    Args:
+        binary_string (str): Binary string to be stuffed.
+
+    Returns:
+        str: Binary string after stuffing.
+
     """
-    stuffed = ""
+    result = ''
+
+    # Initialize a count for consecutive 0's
     count = 0
-    last_bit = None  # Track the last bit to detect polarity changes
 
-    for bit in data:
-        # Increment the count if the bit matches the last one
-        if bit == last_bit:
+    for bit in binary_string:
+
+        # Appending the current bit to the result string
+        result += bit
+        
+        # Incrementing the count if the current bit is 0
+        if bit == '0':
             count += 1
+            
+            # Inserting a 1 after 5 consecutive 0's
+            if count == 5:
+                result += '1'
+                # Reseting the count after inserting the 1
+                count = 0
         else:
-            count = 1  # Reset count for a new bit
-            last_bit = bit  # Update the last bit tracker
-        
-        # Add the current bit to the stuffed data
-        stuffed += bit
-        
-        # If we reach six consecutive bits of the same polarity, stuff the opposite bit
-        if count == 5:
-            stuffed += '0' if bit == '1' else '1'
-            count = 0  # Reset the count after stuffing
+            # Reseting the count if the current bit is not 0
+            count = 0
 
-    return stuffed
+    return result
 
 
 def crc_remainder(input_bitstring, polynomial_bitstring, initial_filler):
@@ -100,7 +109,7 @@ def evaluation_metrics(all_preds, all_labels):
 
     # Total number of original attack packets (all_labels == 0)
     total_attack_packets = (all_labels == 1).sum().item()
-    # total_attack_packets = 1361
+    # total_attack_packets = 1450
     oa_asr = misclassified_attack_packets / total_attack_packets
 
     return tnr, mdr, oa_asr, IDS_accu, IDS_prec, IDS_recall, IDS_F1
@@ -200,7 +209,7 @@ def load_dataset(data_dir,label_file,device,is_train=True):
     return dataset, data_loader
 
 def saving_image(img, name):
-    save_image(img, f'./T_feedback_surr_gradient/perturbed_image_{name}.png')
+    save_image(img, f'./Images_Inject_and_modify/perturbed_image_{name}.png')
 
 def print_image(img,n,pack):
     img = img.detach()
@@ -381,7 +390,7 @@ def apply_constraint(image, mask,perturbed_image ):
                     perturbation_bits +='0'
             
             # Calculate CRC (sof, id,rtr, idebit, ro, dlc,data ) crc is calculated on raw data not he bit stuffed data
-            stuffed_perturbation_bits = bit_stuff(perturbation_bits)
+            stuffed_perturbation_bits = stuff_bits(perturbation_bits)
             
             # Reassign the stuffed bits back to `perturbed_image`
             for i,bit in enumerate(stuffed_perturbation_bits):
@@ -392,7 +401,7 @@ def apply_constraint(image, mask,perturbed_image ):
             crc_output = calculate_crc(crc_input)
             crc_output = bin(crc_output)[2:].zfill(15)
             # crc_output = crc_remainder(crc_input, '100000111', '0')
-            bit_stuffed_crc = bit_stuff(crc_output[:15])
+            bit_stuffed_crc = stuff_bits(crc_output[:15])
             
             # Apply bit-stuffed CRC to the next 15 pixels
             for i, bit in enumerate(bit_stuffed_crc):
@@ -612,7 +621,7 @@ def gradient_perturbation(image, perturbed_image,mask):
 
             stuffing = starting_bits + crc_output
             
-            stuffed_perturbation_bits = bit_stuff(stuffing)
+            stuffed_perturbation_bits = stuff_bits(stuffing)
             
             for i,bit in enumerate(stuffed_perturbation_bits):
                 value = 1.0 if bit =='1' else 0.0
@@ -632,7 +641,7 @@ def gradient_perturbation(image, perturbed_image,mask):
                 perturbed_image[b, 0, row, i] = 0.0
                 perturbed_image[b, 2, row, i] = 0.0
         
-        
+            # print("perturbed bits:", perturbed_image[b, :, row, :])
     return perturbed_image
 
 def fixed_id_data_perturbation(image, perturbed_image,mask,ID,Data):
@@ -652,7 +661,7 @@ def fixed_id_data_perturbation(image, perturbed_image,mask,ID,Data):
             crc_output = bin(crc_output)[2:].zfill(15)
 
             stuffing = starting_bits + crc_output
-            stuffed_perturbation_bits = bit_stuff(stuffing)
+            stuffed_perturbation_bits = stuff_bits(stuffing)
             
             for i,bit in enumerate(stuffed_perturbation_bits):
                 value = 1.0 if bit =='1' else 0.0
@@ -826,8 +835,8 @@ def Attack_procedure(model, test_model, device, test_loader, injection_type, mod
 
 def main():
 
-    test_model_type = 'densenet201'
     surr_model_type='densenet161'
+    test_model_type = 'densenet201'
 
     #Define paths for dataset and model
     test_dataset_dir = './selected_images'
