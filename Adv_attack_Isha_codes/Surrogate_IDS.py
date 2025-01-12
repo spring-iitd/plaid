@@ -6,6 +6,8 @@ from torchvision import datasets, transforms, models
 import numpy as np
 import os
 from PIL import Image
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score, roc_curve
 
 # Define transformations and dataset paths
 data_transforms = {
@@ -45,18 +47,51 @@ def load_dataset(data_dir, label_file, device, num_workers, is_train=True):
     print(f'Loaded {len(images)} images.')
     return data_loader
 
-def train_model(train_loader, device):
+def train_model(train_loader, device, model_name = 'resnet'):
     """Train the model on the training dataset."""
-    model = models.resnet18(weights='IMAGENET1K_V1')  # Use the updated way to load weights
-    num_classes = 2
-    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    # model = models.resnet18(weights='IMAGENET1K_V1')  # Use the updated way to load weights
+    
+    if model_name == 'resnet':
+        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        
+        for name, param in model.named_parameters():
+            if "fc" in name:  
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+                
+        num_classes = 2
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+
+    elif model_name == 'convnext':
+        model = models.convnext_base(pretrained = True)
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        num_features = model.classifier[-1].in_features
+        model.classifier[-1] = nn.Linear(num_features, 2) 
+    
+    elif model_name == 'densenet':
+        model = models.densenet169(pretrained=True)
+        # model = models.densenet121(pretrained=True)
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        num_features = model.classifier.in_features
+        model.classifier = nn.Linear(num_features, 2) 
+    
+    else:
+        raise ValueError("Model type not included in code")
+    
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     model = model.to(device)
 
-    num_epochs = 2
+    num_epochs = 50
     for epoch in range(num_epochs):
         print(f'Epoch {epoch}/{num_epochs - 1}')
         print('-' * 10)
@@ -86,33 +121,30 @@ def train_model(train_loader, device):
         print(f'Train Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
     print("Training complete!")
-    torch.save(model.state_dict(), 'custom_cnn_model_chd_resnet_.pth')
+    # torch.save(model.state_dict(), f'custom_cnn_model_chd_{model_name}_new_Dataset.pth')
 
     return model
 
-def test_model(test_loader, device, model):
+
+def test_model(test_loader, device, model, model_type, save_roc_path="roc_curves"):
     """
-    Load a pre-trained model, evaluate it on the test dataset, and calculate accuracy.
+    Load a pre-trained model, evaluate it on the test dataset, calculate accuracy, and save the AUC/ROC curve.
 
     Parameters:
     - test_loader: DataLoader for the test dataset
-    - model_path: Path to the trained model file
+    - device: Device to use for evaluation (e.g., "cuda" or "cpu")
+    - model: Trained model to evaluate
+    - save_roc_path: File path to save the ROC curve image
 
     Returns:
     - test_accuracy: Accuracy of the model on the test dataset
+    - auc_score: AUC score of the model on the test dataset
     """
-
-    # # Load the pre-trained ResNet18 model
-    # model = models.resnet18(pretrained=True)
-    # num_classes = 2  # Update based on your specific classification task
-    # model.fc = nn.Linear(model.fc.in_features, num_classes)  # Modify the final layer
-    # model.load_state_dict(torch.load(model_path))  # Load the trained model weights
-    # model.eval()  # Set the model to evaluation mode
-
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model.to(device)  # Move model to the appropriate device
+    model.eval()
+    model = model.to(device)
 
     # Initialize lists to store predictions and labels
+    all_probs = []  # Store probabilities for ROC curve
     all_preds = []
     all_labels = []
 
@@ -121,13 +153,16 @@ def test_model(test_loader, device, model):
         inputs, labels = inputs.to(device), labels.to(device)  # Move data to the appropriate device
         with torch.no_grad():  # Disable gradient calculation for evaluation
             outputs = model(inputs)  # Forward pass
+            probs = torch.softmax(outputs, dim=1)[:, 1]  # Get probabilities for the positive class
             _, preds = torch.max(outputs, 1)  # Get predicted class labels
         
-        # Store predictions and labels
+        # Store predictions, probabilities, and labels
+        all_probs.extend(probs.cpu().numpy())
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
 
     # Convert lists to numpy arrays
+    all_probs = np.array(all_probs)
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
 
@@ -135,15 +170,38 @@ def test_model(test_loader, device, model):
     test_accuracy = np.sum(all_preds == all_labels) / len(all_labels)
     print(f'Test Accuracy: {test_accuracy:.4f}')
 
-    return test_accuracy  # Return accuracy for potential further use
+    # Calculate AUC and ROC curve
+    auc_score = roc_auc_score(all_labels, all_probs)
+    fpr, tpr, _ = roc_curve(all_labels, all_probs)
+
+    print(f'AUC Score: {auc_score:.4f}')
+
+    # Plot and save ROC curve
+    plt.figure()
+    plt.plot(fpr, tpr, label=f'AUC = {auc_score:.4f}')
+    plt.plot([0, 1], [0, 1], 'k--', label='Random Guess')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.legend(loc='lower right')
+    plt.grid()
+    plt.savefig(os.path.join(save_roc_path, f'{model_type}_curve.png'))
+    print(f'ROC curve saved to {save_roc_path}')
+    plt.close()
+
+
 
 
 
 def main():
-    train_dataset_dir = './CHD_images'
+    train_dataset_dir = '../../scratch/new_imgs/DoS_images/'
     test_dataset_dir = './selected_images'
-    train_label_file = "CHD_images.txt"
+
+    train_label_file = "../../scratch/new_imgs/DoS_labels.txt"
     test_label_file = "selected_images.txt"  # Change to correct label file if needed
+
+    model_type = 'resnet'
+    
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(torch.version.cuda)  # Check the CUDA version
     print(torch.cuda.get_device_name(0))  # Get the name of the GPU
@@ -154,8 +212,8 @@ def main():
     print("Loaded training set")
 
     # Train the model
-    model = train_model(train_loader, device)
-    test_model(test_loader, device, model )
+    model = train_model(train_loader, device, model_type)
+    test_model(test_loader, device, model, model_type)
 
 if __name__ == "__main__":
     main()
