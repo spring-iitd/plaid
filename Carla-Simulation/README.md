@@ -2,21 +2,18 @@
 
 This guide will help you set up CARLA and run the custom simulation designed for security research and intrusion detection.
 
----
-## ⚡ Step 1: Install CARLA
+## Step 1: Install CARLA
 
 Follow the official CARLA Quickstart Guide to install CARLA as a package:
 
 🔗 [CARLA Quickstart Guide](https://carla.readthedocs.io/en/latest/start_quickstart/)
 
----
-
-## 🛠️ Step 2: Create and Configure Python Virtual Environment
+## Step 2: Create and Configure Python Virtual Environment
 
 1. **Set up virtual environment:**
 ```bash
 # Create a virtual environment
-cd ~/CARLA_0.9.15
+cd ~/carla_0.9.15
 python3 -m venv carla-venv
 
 # Activate virtual environment
