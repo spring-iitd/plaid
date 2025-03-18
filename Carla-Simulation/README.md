@@ -66,3 +66,31 @@ chmod +x run_simulation.sh
 # Execute the script
 ./run_simulation.sh
 ```
+
+## Step 6: Run the Attack Simulation
+
+To run the attack simulation, modify `log_gen.py` by uncommenting line **839** and indenting the next two lines properly.
+
+1. **Modify `log_gen.py` for Attack Simulation**
+
+Uncomment line 839 and indent the next two lines:
+```bash
+# Original Code (Commented)
+# if current_timestamp < 22.6015625 or current_timestamp > 22.7265625:
+world_1.player.apply_control(control_1)
+gen_control_obj_1.append(control_1)
+world_2.player.apply_control(control_2)
+
+# Modified Code (Uncomment and indent correctly)
+if current_timestamp < 22.6015625 or current_timestamp > 22.7265625:
+    world_1.player.apply_control(control_1)
+    gen_control_obj_1.append(control_1)
+world_2.player.apply_control(control_2)
+```
+
+2. **Save and Exit**
+
+3. **Run the simulation**
+```bash
+./run_simulation.sh
+```
