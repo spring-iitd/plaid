@@ -29,7 +29,7 @@ pip3 install --upgrade pip
 pip3 install -r requirements.txt
 ```
 
-3. **Enable Virtual CAN Bus (vcan0)**
+## Step 3: Enable Virtual CAN Bus (vcan0)
 ```bash
 # Load the vcan module and set up vcan0
 sudo modprobe vcan
@@ -37,20 +37,20 @@ sudo ip link add dev vcan0 type vcan
 sudo ip link set up vcan0
 ```
 
-4. **Move Required Files**
+## Step 4: Move Required Files
 
-Before running the simulation, move the `log_gen.py` and `run_simulation.sh` files to the `~/carla_0.9.15/PythonAPI/examples/` directory.
+Before running the simulation, move the `log_gen.py` and `run_simulation.sh` files from their current directory to the `~/carla_0.9.15/PythonAPI/examples/` directory.
 
 ```bash
-# Move files to the appropriate directory
+# Move files from the current directory to the appropriate directory
 mv log_gen.py run_simulation.sh ~/carla_0.9.15/PythonAPI/examples/
 ```
 
-5. **Run the Simulation**
+## Step 5: Run the Simulation
 
 To execute the simulation, run the `run_simulation.sh` script.
 
-5.1. **Create Required Directories**
+1. **Create Required Directories**
 Before running the simulation, create the `Logs` and `Graphs` folders to store the generated logs and graphs.
 
 ```bash
@@ -58,7 +58,7 @@ Before running the simulation, create the `Logs` and `Graphs` folders to store t
 mkdir -p Logs Graphs
 ```
 
-5.2. **Run the Simulation**
+2. **Run the Simulation**
 ```bash
 # Grant execute permission to the script
 chmod +x run_simulation.sh
