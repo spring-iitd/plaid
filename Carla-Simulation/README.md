@@ -39,11 +39,18 @@ sudo ip link set up vcan0
 
 ## Step 4: Move Required Files
 
-Before running the simulation, move the `log_gen.py`, `plot_graphs.py` and `run_simulation.sh` files from their current directory to the `~/carla_0.9.15/PythonAPI/examples/` directory.
+Before running the simulation, move the `bighonda.dbc`,`log_gen.py`, `plot_graphs.py` and `run_simulation.sh` files from their current directory to the `~/carla_0.9.15/PythonAPI/examples/` directory.
 
 ```bash
 # Move files from the current directory to the appropriate directory
-mv log_gen.py plot_graphs.py run_simulation.sh ~/carla_0.9.15/PythonAPI/examples/
+mv bighonda.dbc log_gen.py plot_graphs.py run_simulation.sh ~/carla_0.9.15/PythonAPI/examples/
+```
+
+Move `custom_agent.py` to the `~/carla_0.9.15/PythonAPI/carla/agents/navigation/` directory.
+
+```bash
+# Move custom_agent.py to the navigation directory
+mv custom_agent.py ~/carla_0.9.15/PythonAPI/carla/agents/navigation/
 ```
 
 ## Step 5: Run the Simulation
