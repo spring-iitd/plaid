@@ -95,9 +95,16 @@ if current_timestamp < 22.6015625 or current_timestamp > 22.7265625:
 world_2.player.apply_control(control_2)
 ```
 
-2. **Save and Exit**
+2. **Modify Time Interval for Different Attack Scenarios**
 
-3. **Run the simulation**
+If you want to perform the attack at a different time interval, modify the range in the following line:
+```bash
+if current_timestamp < 22.6015625 or current_timestamp > 22.7265625:
+```
+
+3. **Save and Exit**
+
+4. **Run the simulation**
 ```bash
 ./run_simulation.sh
 ```
