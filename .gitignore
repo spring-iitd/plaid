@@ -15,3 +15,5 @@ Smart Attack Algorithm/Attack Comparison/*.csv
 Smart Attack Algorithm/Attack Comparison/*.pkl
 Smart Attack Algorithm/Attack Comparison/*.h5
 Smart Attack Algorithm/Attack Comparison/*.sav
+
+CAN IDS Pipeline/datasets/*
