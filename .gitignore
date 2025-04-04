@@ -17,3 +17,4 @@ Smart Attack Algorithm/Attack Comparison/*.h5
 Smart Attack Algorithm/Attack Comparison/*.sav
 
 CAN IDS Pipeline/datasets/*
+CAN IDS Pipeline/__pycache__/
