@@ -84,8 +84,6 @@ def MIRGU_to_CANbusData(file_path):
         return csv_file
 
 def normal_to_CANbusData(file_path):
-    print("INSIDE NORMAL DATA")
-    
     dir_path = "/".join(file_path.split("/")[:-1])
     mod_dir_path = os.path.join(dir_path,"modified_dataset")
     file = file_path.split("/")[-1].replace(".txt",".csv") 
@@ -161,3 +159,5 @@ def txtFile_to_CANbusData(file_path):
         return normal_to_CANbusData(file_path)
     else:
         return OTIDS_to_CANbusData(file_path)
+    
+

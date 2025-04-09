@@ -3,9 +3,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 def split_and_store_data(input_dir, test_size=0.2):
-    input_dir = os.path.join(input_dir,"modified_dataset")
     train_dir = os.path.join(input_dir,"train")
     test_dir = os.path.join(input_dir,"test")
+    input_dir = os.path.join(input_dir,"modified_dataset")
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(test_dir, exist_ok=True)
 

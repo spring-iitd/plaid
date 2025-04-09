@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def extract_features(dataset_path,train_test):
-    modified_dataset_path = os.path.join(dataset_path,"modified_dataset",train_test)
+    modified_dataset_path = os.path.join(dataset_path,train_test)
     df_list = []
     file_paths = [os.path.join(modified_dataset_path, f) for f in os.listdir(modified_dataset_path)]
     for file_path in file_paths:

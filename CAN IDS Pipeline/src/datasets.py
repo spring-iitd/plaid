@@ -49,6 +49,15 @@ class CANBusDataset(Dataset):
 
 
 def dataset_selection(dataset_path):
-    file_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith(('.csv', '.txt','.log'))]
+    orig_dataset_path = os.path.join(dataset_path, 'original_dataset')
+    if not os.path.exists(orig_dataset_path):
+        os.makedirs(orig_dataset_path)
+        for file in os.listdir(dataset_path):
+            if os.path.isdir(file) or not file.endswith(('.csv', '.txt','.log')):
+                continue
+            old_file_path = os.path.join(dataset_path, file)
+            new_file_path = os.path.join(orig_dataset_path, file)
+            os.system(f"mv \"{old_file_path}\" \"{new_file_path}\"")
+    file_paths = [os.path.join(orig_dataset_path, f) for f in os.listdir(orig_dataset_path) if f.endswith(('.csv', '.txt','.log'))]
     for file_path in file_paths:
         CANBusDataset(file_path)
