@@ -20,7 +20,7 @@ def read_attack_data(data_path):
     data = shift_columns(data)
 
     ##Replacing all NaNs with '00'
-    data = data.replace(np.NaN, '00')
+    data = data.replace(np.nan, '00')
 
     ##Joining all data columns to put all data in one column
     data_cols = ['data0', 'data1', 'data2', 'data3', 'data4', 'data5', 'data6', 'data7']

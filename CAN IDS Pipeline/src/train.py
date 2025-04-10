@@ -1,8 +1,9 @@
+import os
 from sklearn.preprocessing import StandardScaler
 
 from get_ids import get_model
 
-def train_model(TrainSplit,modelName):
+def train_model(TrainSplit, modelName, modelPath):
     if(modelName == "MLP"):
         X_train, Y_train = TrainSplit.drop(columns = ['flag', 'timestamp']).values, TrainSplit['flag'].replace({'R': 0, 'T': 1}).values
     else:
@@ -19,3 +20,6 @@ def train_model(TrainSplit,modelName):
     print("Starting Training")
     model.train(X_train, Y_train)
     print("Training Completed")
+
+    model.save(modelPath)
+    print(f"Model saved at {os.path.normpath(modelPath)}")

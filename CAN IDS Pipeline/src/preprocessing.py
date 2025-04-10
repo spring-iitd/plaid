@@ -3,6 +3,9 @@ from utilities import *
 import pandas as pd
 import numpy as np
 import os 
+import sys
+import importlib
+from torch.utils.data import Dataset
 
 def extract_features(dataset_path,train_test):
     modified_dataset_path = os.path.join(dataset_path,"modified_dataset",train_test)
@@ -41,7 +44,7 @@ def read_attack_data(data_path):
 def MIRGU_to_CANbusData(file_path):
 
     dir_path = "/".join(file_path.split("/")[:-1])
-    mod_dir_path = os.path.join(dir_path,"modified_dataset")
+    mod_dir_path = os.path.join(dir_path, "..","modified_dataset")
     file = file_path.split("/")[-1][:-4]+".csv"
     os.makedirs(mod_dir_path, exist_ok=True)
     csv_file = os.path.join(mod_dir_path,file)
@@ -85,7 +88,7 @@ def MIRGU_to_CANbusData(file_path):
 
 def normal_to_CANbusData(file_path):
     dir_path = "/".join(file_path.split("/")[:-1])
-    mod_dir_path = os.path.join(dir_path,"modified_dataset")
+    mod_dir_path = os.path.join(dir_path, "..","modified_dataset")
     file = file_path.split("/")[-1].replace(".txt",".csv") 
     os.makedirs(mod_dir_path, exist_ok=True)
     csv_file = os.path.join(mod_dir_path,file)
@@ -111,7 +114,7 @@ def normal_to_CANbusData(file_path):
 
 def CH_to_CANbusData(file_path):
     dir_path = "/".join(file_path.split("/")[:-1])
-    mod_dir_path = os.path.join(dir_path,"modified_dataset")
+    mod_dir_path = os.path.join(dir_path, "..","modified_dataset")
     file = file_path.split("/")[-1][:-4]+".csv"
     os.makedirs(mod_dir_path, exist_ok=True)
     csv_file = os.path.join(mod_dir_path,file)
@@ -130,7 +133,7 @@ def CH_to_CANbusData(file_path):
 
 def OTIDS_to_CANbusData(file_path):
     dir_path = "/".join(file_path.split("/")[:-1])
-    mod_dir_path = os.path.join(dir_path,"modified_dataset")
+    mod_dir_path = os.path.join(dir_path, "..","modified_dataset")
     file = file_path.split("/")[-1].replace(".txt",".csv")
 
     attack_free = 'attack_free' in file.lower()
@@ -161,3 +164,67 @@ def txtFile_to_CANbusData(file_path):
         return OTIDS_to_CANbusData(file_path)
     
 
+class CANBusDataset(Dataset):
+    def __init__(self, file_path):
+        csv_file = self.__preprocess_data(file_path) 
+        self.data = self.load_csv(csv_file)
+        self.unique_labels = sorted(set(self.data['flag'].astype(str)))
+        self.label_to_idx = {label: idx for idx, label in enumerate(self.unique_labels)}
+        
+    def __preprocess_data(self,file_path):
+        if(file_path.endswith(".txt")):
+            return txtFile_to_CANbusData(file_path)
+        elif(file_path.endswith(".csv")):
+            return CH_to_CANbusData(file_path)
+        elif(file_path.endswith(".log")):
+            return MIRGU_to_CANbusData(file_path)
+        else:
+            print("INVALID PATH ")
+
+    def load_csv(self, csv_file):
+        columns = ['timestamp','can_id', 'dlc', 'data0', 'data1', 'data2', 'data3', 'data4',
+            'data5', 'data6', 'data7', 'flag']
+        df = pd.read_csv(csv_file, names=columns, header=None,low_memory=False,skiprows = 2)
+        return df
+
+    def __len__(self):
+        return len(self.data)
+
+    def get_feature_names(self):
+        return ['timestamp', 'can_id', 'dlc', 'data0', 'data1','data2', 'data3', 'data4', 'data5', 'data6', 'data7', 'flag']
+
+    def get_num_features(self):
+        return len(self.get_feature_names())
+
+    def get_num_classes(self):
+        return len(self.unique_labels)
+    
+    def get_label_mapping(self):
+        return self.label_to_idx
+
+
+
+def preprocess_dataset(dataset_path):
+    orig_dataset_path = os.path.join(dataset_path, 'original_dataset')
+    if not os.path.exists(orig_dataset_path):
+        os.makedirs(orig_dataset_path)
+        for file in os.listdir(dataset_path):
+            if os.path.isdir(file) or not file.endswith(('.csv', '.txt','.log')):
+                continue
+            old_file_path = os.path.join(dataset_path, file)
+            new_file_path = os.path.join(orig_dataset_path, file)
+            os.system(f"mv \"{old_file_path}\" \"{new_file_path}\"")
+    file_paths = [os.path.join(orig_dataset_path, f) for f in os.listdir(orig_dataset_path) if f.endswith(('.csv', '.txt','.log'))]
+    for file_path in file_paths:
+        CANBusDataset(file_path)
+
+def preprocess(dataset_path):
+    preprocess_file_path = os.path.join(dataset_path, 'preprocess_dataset.py')
+    if os.path.exists(preprocess_file_path):
+        sys.path.append(dataset_path)
+        ppd = importlib.import_module('preprocess_dataset')
+        if hasattr(ppd, 'preprocess_dataset'):
+            print("Using Preprocessing Script in Dataset")
+            return ppd.preprocess_dataset(dataset_path)
+    print("Using Default Preprocessing Script")
+    preprocess_dataset(dataset_path)
