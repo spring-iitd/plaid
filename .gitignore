@@ -24,3 +24,7 @@ CAN IDS Pipeline/models/
 Statistical Techniques/**/*.csv
 Statistical Techniques/**/*.txt
 >>>>>>> 5bc51af0a (added statistical techniques)
+CanBus-IDS-main/Data/
+CanBus-IDS-main/results/
+
+
