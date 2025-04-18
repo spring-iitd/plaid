@@ -1,0 +1,317 @@
+\documentclass{article}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{amsmath}
+\pagenumbering{gobble}
+
+\begin{document}
+
+\begin{algorithm}
+    \caption{Collect Statistics}
+    \label{alg:collect_stats}
+    \begin{algorithmic}[1]
+    \Procedure{collect\_stats}{data}
+    \State \textbf{Input:} data: list of records containing inter-arrival times (IAT) and arbitration IDs
+    \State \textbf{Output:} median and standard deviation of IAT grouped by arbitration ID
+    \For{each arbitration ID in data}
+        \State Compute median(IAT) for the given arbitration ID
+        \State Compute standard\_deviation(IAT) for the given arbitration ID
+    \EndFor
+    \State \Return computed statistics (median and standard deviation) for each arbitration ID
+    \EndProcedure
+    \end{algorithmic}
+    \end{algorithm}
+
+\begin{algorithm}
+    \caption{Determine Injection Possibility}
+    \label{alg:injection_possible}
+    \begin{algorithmic}[1]
+    \Procedure{injection\_possible}{IAT}
+    \State \textbf{Input:} IAT (inter-arrival time)
+    \State \textbf{Output:} Boolean indicating whether injection is possible
+    \State $t_{max} \gets 0.000216$ \Comment{Maximum allowed inter-arrival time}
+    \If{$\lfloor\frac{IAT}{t_{max}}\rfloor \geq 1$}
+        \State \Return True
+    \Else
+        \State \Return False
+    \EndIf
+    \EndProcedure
+    \end{algorithmic}
+    \end{algorithm}
+
+\begin{algorithm}
+    \caption{Calculate Periodicity}
+    \label{alg:calculate_periodicity}
+    \begin{algorithmic}[1]
+    \Procedure{calculate\_periodicity}{data}
+    \State \textbf{Input:} data (list of records containing timestamps and arbitration IDs)
+    \State \textbf{Output:} periodicity\_map (dictionary mapping IDs to their periodicity)
+    \State periodicity\_map $\gets \{\}$ \Comment{Initialize an empty hashmap}
+    \For{each id in data['ID']}
+        \State $t_1 \gets$ timestamp of first occurrence of id
+        \State $t_l \gets$ timestamp of last occurrence of id
+        \State num\_occurrences $\gets$ number of packets in data with id
+        \If{num\_occurrences $> 1$}
+            \State periodicity $\gets \frac{t_l - t_1}{\text{num\_occurrences} - 1}$
+        \Else
+            \State periodicity $\gets 0$
+        \EndIf
+        \State periodicity\_map[id] $\gets$ periodicity
+    \EndFor
+    \State \Return periodicity\_map
+    \EndProcedure
+    \end{algorithmic}
+    \end{algorithm}
+
+    \begin{algorithm}
+        \caption{Calculate Average Time Ratio (ATR)}
+        \label{alg:calculate_atr}
+        \begin{algorithmic}[1]
+        \Procedure{calculate\_atr}{data, curr\_ts, periodicity\_map}
+        \State \textbf{Input:} 
+        \State \hspace{\algorithmicindent} data (list of records containing timestamps and arbitration IDs)
+        \State \hspace{\algorithmicindent} curr\_ts (current timestamp)
+        \State \hspace{\algorithmicindent} periodicity\_map (dictionary mapping IDs to their periodicities)
+        \State \textbf{Output:} atr\_map (dictionary mapping IDs to their avg time ratio)
+        \State atr\_map $\gets \{\}$ \Comment{Initialize an empty hashmap}
+        \For{each id in data['ID']}
+            \State $t_l \gets$ last occurrence timestamp of id
+            \State atr $\gets \frac{\text{curr\_ts} - t_l}{\text{periodicity\_map[id]}}$
+            \State atr\_map[id] $\gets$ atr
+        \EndFor
+        \State \Return atr\_map
+        \EndProcedure
+        \end{algorithmic}
+        \end{algorithm}
+
+        
+\begin{algorithm}
+    \caption{Convert Hexadecimal to Binary}
+    \label{alg:hex_to_bin}
+    \begin{algorithmic}[1]
+    \Procedure{hex\_to\_bin}{hex\_val, num\_bits}
+    \State \textbf{Input:}
+    \State \hspace{\algorithmicindent} hex\_val (hexadecimal value)
+    \State \hspace{\algorithmicindent} num\_bits (number of bits required in binary representation)
+    \State \textbf{Output:} Binary representation of hex\_val padded to num\_bits
+    \State \Return binary(hex\_val).zfill(num\_bits)
+    \EndProcedure
+    \end{algorithmic}
+    \end{algorithm}
+
+    \begin{algorithm}
+        \caption{Frame Length Calculation}
+        \label{alg:frame_len}
+        \begin{algorithmic}[1]
+        \Procedure{frame\_len}{id, dlc, payload}
+        \State \textbf{Input:} id (arbitration ID), dlc (data length code), payload (data payload)
+        \State \textbf{Output:} Length of the stuffed CAN frame
+        \State id\_binary $\gets$ hex\_to\_bin(id, 11)
+        \State data\_binary $\gets$ hex\_to\_bin(payload, dlc $\times$ 8)
+        \State dlc\_binary $\gets$ bin(dlc).zfill(4)
+        \State crc\_input $\gets$ concatenate(start\_of\_frame, id\_binary, rtr\_bit, ide\_bit, control, r0\_bit, dlc\_binary, payload)
+        \State crc\_bits $\gets$ bin(calculate\_crc(crc\_input)).zfill(15)
+        \State crc\_delimiter $\gets$ '1'
+        \State ack\_bit $\gets$ '0'
+        \State ack\_delimiter $\gets$ '1'
+        \State eof\_bits $\gets$ '1' $\times$ 7
+        \State ifs\_bits $\gets$ '1' $\times$ 3
+        \State full\_frame $\gets$ concatenate(start\_of\_frame, id\_binary, rtr\_bit, ide\_bit, control, r0\_bit, dlc\_binary, payload, crc\_bits, crc\_delimiter, ack\_bit, ack\_delimiter, eof\_bits)
+        \State stuffed\_frame $\gets$ stuff\_bits(full\_frame)
+        \State \Return len(stuffed\_frame)
+        \EndProcedure
+        \end{algorithmic}
+        \end{algorithm}
+        
+\begin{algorithm}
+\caption{Transmission Time Calculation}
+\label{alg:transmission_time}
+\begin{algorithmic}[1]
+\Procedure{transmission\_time}{frame\_len, bus\_rate}
+\State \textbf{Input:} frame\_len (length of the CAN frame in bits), bus\_rate (bit rate of the CAN bus in kbps)
+\State \textbf{Output:} Transmission time for the CAN frame in seconds
+\State bus\_rate $\gets$ 500 \Comment{Default bus rate in kbps}
+\State transmission\_time $\gets \frac{\text{frame\_len}}{\text{bus\_rate} \times 1000}$
+\State \Return transmission\_time
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+        
+\begin{algorithm}
+\caption{Find Key with Highest Value}
+\label{alg:find_key_with_highest_value}
+\begin{algorithmic}[1]
+\Procedure{find\_key\_with\_highest\_value}{hashmap, id\_list}
+\State \textbf{Input:} hashmap (dictionary mapping keys to values), id\_list (list of keys to search in the hashmap)
+\State \textbf{Output:} Key with the highest value among those present in id\_list
+\State max\_key $\gets$ None \Comment{Initialize the key with the highest value}
+\State max\_val $\gets -\infty$ \Comment{Initialize the maximum value to negative infinity}
+\For{each key in id\_list}
+    \If{key exists in hashmap}
+        \If{hashmap[key] $>$ max\_val}
+            \State max\_val $\gets$ hashmap[key] \Comment{Update maximum value}
+            \State max\_key $\gets$ key \Comment{Update key with highest value}
+            
+        \EndIf
+    \EndIf
+\EndFor
+\State \Return max\_key
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+        
+% \begin{algorithm}
+% \caption{Attack Function}
+% \label{alg:attack}
+% \begin{algorithmic}[1]
+% \Procedure{attack}{data}
+% \State \textbf{Input:} data (DataFrame containing CAN bus traffic data)
+% \State \textbf{Output:} out (list of CAN frames, including injected attack frames)
+% \State last\_appended $\gets 0$
+% \State Remove 'IAT' column from data
+% \State standby\_packets $\gets 10\%$ of data length
+% \State out $\gets$ empty list
+% \State injection\_count $\gets 0$
+% \State ptr $\gets$ standby\_packets
+% % \State stats\_df $\gets$ collect_stats(data[:standby\_packets])
+% % \State stats\_df $\gets$ \texttt{collect\_stats(data[:standby\_packets])}
+% \State stats\_df $\gets$ collect\_stats(data[\texttt{:}standby\_packets])
+% \For{ind from 0 to length of data}
+%     \If{ind $<$ standby\_packets}
+%         \State Append data[ind] to out
+%         \State last\_appended $\gets$ ind
+%     \Else
+%         \State curr\_ts $\gets$ data['Timestamp'][ind]
+%         \State prev\_ts $\gets$ data['Timestamp'][ind - 1]
+%         \State curr\_iat $\gets$ curr\_ts - prev\_ts
+%         \State possible $\gets$ injection\_possible(curr\_iat)
+%         \If{possible}
+%             \State periodicity\_dict $\gets$ calculate\_periodicity(data[:ind])
+%             \State atr\_dict $\gets$ calculate\_atr(data[:ind], curr\_ts, periodicity\_dict)
+%             \State attack\_id $\gets$ key with max value in atr\_dict
+%             \State Select random data for attack\_id from data[:ind]
+%             \State frame\_length $\gets$ frame\_len(attack\_id, dlc, payload)
+%             \State tt $\gets$ transmission\_time(frame\_length)
+%             \State attack\_ts $\gets$ curr\_ts - tt
+%             \If{(attack\_ts $>$ prev\_ts) and (attack\_ts $<$ curr\_ts)}
+%                 \State Calculate max\_delay based on previous frame
+%                 \State delay $\gets 0$
+%                 \For{j from ptr to ind}
+%                     \State Append modified data[j] to out with delay
+%                     \State last\_appended $\gets$ j
+%                     \If{j + 1 == ind} 
+%                         \State break
+%                     \EndIf
+%                     \State Calculate possible auxiliary attack
+%                     \If{auxiliary attack is possible}
+%                         \State Append auxiliary attack frame to out
+%                         \State Update delay
+%                     \EndIf
+%                 \EndFor
+%                 \State Append primary attack frame to out
+%                 \State Append data[ind] to out
+%                 \State last\_appended $\gets$ ind
+%                 \State ptr $\gets$ ind + 1
+%             \EndIf
+%         \EndIf
+%     \EndIf
+% \EndFor
+% \State Append remaining data from last\_appended + 1 to end of out
+% \State \Return out
+% \EndProcedure
+% \end{algorithmic}
+% \end{algorithm}
+
+\begin{algorithm}
+    \caption{Attack Function}
+    \label{alg:attack}
+    \begin{algorithmic}[1]
+    \Procedure{attack}{data}
+    \State \textbf{Input:} data (DataFrame containing CAN bus traffic data)
+    \State \textbf{Output:} out (list of CAN frames, including injected attack frames)
+    
+    % Initialization
+    \State last\_appended $\gets 0$
+    \State Remove 'IAT' column from data
+    \State standby\_packets $\gets 10\%$ of data length
+    \State out $\gets$ empty list
+    \State injection\_count $\gets 0$
+    \State ptr $\gets$ standby\_packets
+    \State stats\_df $\gets$ collect\_stats(data[:standby\_packets])
+    
+    % Main loop through data
+    \For{ind from 0 to length of data}
+        \If{ind $<$ standby packets}
+            \State Append data[ind] to out
+            \State last appended $\gets$ ind
+        \Else
+            \State curr ts $\gets$ data['Timestamp'][ind]
+            \State prev ts $\gets$ data['Timestamp'][ind - 1]
+            \State curr iat $\gets$ curr ts - prev ts
+    
+            % Check if injection is possible
+            \State possible $\gets$ injection possible(curr iat)
+            \If{possible}
+                % Calculate periodicity and ATR values
+                \State periodicity dict $\gets$ calculate periodicity(data[:ind])
+                \State atr dict $\gets$ calculate atr(data[:ind], curr ts, periodicity dict)
+                \State attack id $\gets$ key with max value in atr dict
+    
+                % Select random frame for attack ID
+                \State Select random frame for attack id from data[:ind]
+                \State frame length $\gets$ frame len(attack id, dlc, payload)
+                \State tt $\gets$ transmission time(frame length)
+                \State attack ts $\gets$ curr ts - tt
+    
+                % Validate attack timestamp
+                \If{(attack ts $>$ prev ts) and (attack ts $<$ curr ts)}
+                    % Calculate maximum allowable delay
+                    \State Calculate max delay based on previous frame.
+                    \For{j from ptr to ind}
+                        % Append modified packets with delay
+                        \State Append modified data[j] to out with delay
+                        \If{j + 1 == ind}
+                            \State break
+                        \EndIf
+    
+                        % Auxiliary Attack Logic:
+                        \State next id $\gets$ data[j + 1]['ID']
+                        \State id priority $\gets$ arb priorities[next id]
+                        \State possible\_attack\_ids $\gets$ IDs with priority $\leq$ id priority
+    
+                        % Check if auxiliary attack is possible
+                        \If{possible attack ids is not empty}
+                            \State curr\_periodicity\_dict$\gets$calculate\_periodicity(data[:j])
+                            \State aux\_attack\_id $\gets$ find\_key\_with\_highest\_value(curr\_periodicity\_dict, \State \hspace{100pt} possible\_attack\_ids)
+                            \State Select random frame for aux\_attack\_id from data[:j]
+                            \State aux\_payload $\gets$ random payload of selected id
+                             
+                            % Validate auxiliary attack timestamp
+                            
+                            \State Append auxiliary attack frame to out.
+                            \State Update delay based on transmission time.
+                            
+                        \EndIf
+                    \EndFor
+    
+                    % Append primary attack frame to out
+                    \State Append primary attack and current packet frame to out.
+                    \State Update pointers and indices.
+                \EndIf
+            \EndIf
+        \EndIf
+    \EndFor
+    
+    % Append remaining packets after the last appended index
+    Append remaining packets from last appended index + 1 to end of out.
+    
+    % Return the output list of frames
+    Return out.
+    \EndProcedure
+    
+    
+    \end{algorithmic}
+    \end{algorithm}
+    
+
+\end{document}
