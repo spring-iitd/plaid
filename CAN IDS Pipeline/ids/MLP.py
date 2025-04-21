@@ -37,11 +37,11 @@ class MLP(IDS):
         return accuracy_score(Y_test, Y_pred)
 
     def save(self, path):
-        joblib.dump(self.dt, path)
+        joblib.dump(self.mlp, path)
 
     def predict(self, X_test):
         X_test = np.array(X_test).astype("float32")
         return self.mlp.predict(X_test, batch_size=8192).argmax(axis=1)
 
     def load(self, path):
-        self.mlp = load_model(path, compile=False)
+        self.mlp = joblib.load(path)

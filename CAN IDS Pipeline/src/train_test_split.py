@@ -14,7 +14,7 @@ def split_and_store_data(input_dir, test_size=0.2):
     for file in csv_files:
         file_path = os.path.join(input_dir, file)
  
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path,low_memory=False)
         
         train_df, test_df = train_test_split(df, test_size=test_size, random_state=42)
 

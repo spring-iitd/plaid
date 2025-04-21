@@ -22,10 +22,9 @@ def main():
     if train_test == 'train':
         train_model(trainSplit, MODEL_NAME, model_path)
     elif train_test == 'test':
-        pass
+        test_model(testSplit, MODEL_NAME, model_path)
     else:
         raise Exception(f"Not supported {train_test}")
-    test_model(testSplit, MODEL_NAME, model_path)
 
 
 if __name__ == "__main__":
