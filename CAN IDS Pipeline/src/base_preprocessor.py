@@ -18,11 +18,9 @@ class DataPreprocessor(ABC):
         dir_path = os.path.dirname(file_path)
         orig_dir_path = os.path.join(dir_path, "original_dataset")
         os.makedirs(orig_dir_path, exist_ok=True)
-
         filename = os.path.basename(file_path)
         dest_path = os.path.join(orig_dir_path, filename)
-
-        shutil.copy(file_path, dest_path)  
+        shutil.move(file_path, dest_path)  
 
     def _get_modified_dataset_path(self, dataset_path):
         mod_dir_path = os.path.join(dataset_path, "modified_dataset")

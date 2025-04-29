@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 class IDS(ABC):
     @abstractmethod
     def train(self, X_train, Y_train, **kwargs):
+        self.X, self.Y = self.preprocess(X_train, Y_train)
         """
         Train the model using the provided training dataset.
 
@@ -13,7 +14,8 @@ class IDS(ABC):
         pass
 
     @abstractmethod
-    def test(self, test_dataset, **kwargs):
+    def test(self, X_test, Y_test, **kwargs):
+        self.X, self.Y = self.preprocess(X_test, Y_test)
         """
         Test the model using the provided test dataset.
 
@@ -24,6 +26,7 @@ class IDS(ABC):
 
     @abstractmethod
     def predict(self, X_test):
+        self.X, _ = self.preprocess(X_test, None)
         """
         Predict the output using the model for the given input features.
 
@@ -50,3 +53,9 @@ class IDS(ABC):
         """
         pass
 
+    @abstractmethod
+    def preprocess(self, X, Y):
+        """
+        Preprocess data according to IDS
+        """
+        pass

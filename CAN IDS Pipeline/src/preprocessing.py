@@ -12,6 +12,7 @@ def preprocess(dataset_path):
         print("No preprocessing script found.")
         return
     
+    # Load the file as a module
     spec = importlib.util.spec_from_file_location("preprocess_dataset", preprocess_file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["preprocess_dataset"] = module
@@ -23,10 +24,5 @@ def preprocess(dataset_path):
             print(f"Using Preprocessor: {name}")
             instance = obj()
             return instance.run(dataset_path)
-    
-    # Optional: fallback if they define a function instead
-    # if hasattr(module, 'preprocess_dataset') and callable(module.preprocess_dataset):
-    #     print("Using legacy function-based preprocessing script.")
-    #     return module.preprocess_dataset(dataset_path)
     
     print("No valid preprocessor class or function found.")

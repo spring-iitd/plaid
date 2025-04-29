@@ -4,10 +4,7 @@ from sklearn.preprocessing import StandardScaler
 from get_ids import get_model
 
 def test_model(TestSplit, modelName, modelPath):
-    if(modelName == "MLP"):
-        X_test, Y_test = TestSplit.drop(columns = ['flag', 'timestamp']).values, TestSplit['flag'].replace({'R': 0, 'T': 1}).values
-    else:
-        X_test, Y_test = TestSplit.drop(columns = ['flag', 'timestamp']).values, TestSplit['flag'].values
+    X_test, Y_test = TestSplit.drop(columns = ['flag', 'timestamp']).values, TestSplit['flag'].values
     
     scaler = StandardScaler()
     scaler.fit(X_test)

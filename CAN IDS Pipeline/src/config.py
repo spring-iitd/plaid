@@ -1,11 +1,13 @@
-# DATASET_NAME = "CANIntrusion Dataset"
+DATASET_NAME = "CANIntrusion Dataset"
 #DATASET_NAME = "CarHacking Dataset"
-DATASET_NAME = "MIRGU"
+# DATASET_NAME = "ExampleDataset"
 
+# PREPROCESS = True
 PREPROCESS = False
 
-MODEL_NAME = "DecisionTree"
+# MODEL_NAME = "DecisionTree"
 # MODEL_NAME = "RandomForest"
-# MODEL_NAME = "MLP"
+MODEL_NAME = "MLP"
 
+# TRAIN_TEST = "test"
 TRAIN_TEST = "train"
